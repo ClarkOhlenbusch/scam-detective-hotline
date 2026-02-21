@@ -12,11 +12,15 @@ export default async function TenantSetupPage({
   const { slug } = await params
   const supabase = await createClient()
 
-  const { data: tenant } = await supabase
+  console.log('[v0] Setup page loading for slug:', slug)
+
+  const { data: tenant, error: tenantError } = await supabase
     .from('tenants')
     .select('id, slug, name')
     .eq('slug', slug)
     .single()
+
+  console.log('[v0] Setup tenant query result:', { tenant, error: tenantError })
 
   if (!tenant) {
     notFound()

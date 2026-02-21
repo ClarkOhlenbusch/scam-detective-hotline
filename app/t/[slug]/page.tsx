@@ -12,11 +12,15 @@ export default async function TenantHomePage({
   const { slug } = await params
   const supabase = await createClient()
 
-  const { data: tenant } = await supabase
+  console.log('[v0] Tenant page loading for slug:', slug)
+
+  const { data: tenant, error: tenantError } = await supabase
     .from('tenants')
     .select('id, slug, name, phone_number')
     .eq('slug', slug)
     .single()
+
+  console.log('[v0] Tenant query result:', { tenant, error: tenantError })
 
   if (!tenant) {
     notFound()
