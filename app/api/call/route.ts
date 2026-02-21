@@ -2,6 +2,36 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isValidE164 } from '@/lib/phone'
 import { getClientIp, takeCooldown, takeRateLimit } from '@/lib/rate-limit'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createCallSession } from '@/lib/live-call-session'
+
+async function tryMuteAssistant(controlUrl: string, vapiKey: string) {
+  const payload = JSON.stringify({ control: 'mute-assistant' })
+
+  const response = await fetch(controlUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: payload,
+    signal: AbortSignal.timeout(5_000),
+  })
+
+  if (response.ok) {
+    return true
+  }
+
+  const retry = await fetch(controlUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${vapiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: payload,
+    signal: AbortSignal.timeout(5_000),
+  })
+
+  return retry.ok
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -66,6 +96,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const serverUrl = new URL('/api/vapi/webhook', request.url).toString()
+
     const vapiResponse = await fetch('https://api.vapi.ai/call', {
       method: 'POST',
       headers: {
@@ -77,6 +109,10 @@ export async function POST(request: NextRequest) {
         assistantId,
         phoneNumberId,
         customer: { number: phoneNumber },
+        serverUrl,
+        metadata: {
+          slug,
+        },
       }),
     })
 
@@ -91,11 +127,33 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await vapiResponse.json()
+    const callId = typeof data?.id === 'string' ? data.id : null
+    const callStatus = typeof data?.status === 'string' ? data.status : 'queued'
+
+    if (!callId) {
+      return NextResponse.json(
+        { ok: false, error: 'Call was created but no call ID was returned.' },
+        { status: 502 }
+      )
+    }
+
+    createCallSession({
+      callId,
+      slug,
+      status: callStatus,
+    })
+
+    const monitorControlUrl =
+      typeof data?.monitor?.controlUrl === 'string' ? data.monitor.controlUrl : null
+
+    if (monitorControlUrl) {
+      void tryMuteAssistant(monitorControlUrl, vapiKey).catch(() => undefined)
+    }
 
     return NextResponse.json({
       ok: true,
-      callId: data.id,
-      status: data.status || 'queued',
+      callId,
+      status: callStatus,
     })
   } catch {
     return NextResponse.json(

@@ -35,7 +35,7 @@ export default async function TenantSetupPage({
         </p>
       )}
       <p className="max-w-xs text-center font-mono text-sm leading-relaxed text-muted-foreground">
-        Open a case. Get a second opinion before you act.
+        Save your number once. When a suspicious call starts, tap to launch silent live coaching.
       </p>
       <div className="h-px w-16 bg-border" role="separator" />
       <SetupForm slug={slug} />

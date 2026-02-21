@@ -16,6 +16,7 @@ Use the `@/*` import alias from `tsconfig.json` for internal imports.
 - `pnpm build`: produce a production build.
 - `pnpm start`: serve the production build.
 - `pnpm lint`: run ESLint across the repository.
+- `pnpm test:mock`: run a server-level mock call/transcript sanity flow.
 
 ## Coding Style & Naming Conventions
 - Language: TypeScript with `strict` mode enabled.
@@ -26,11 +27,10 @@ Use the `@/*` import alias from `tsconfig.json` for internal imports.
 - Prefer composing from `components/ui/*` before creating new primitives.
 
 ## Testing Guidelines
-There is currently no dedicated test runner configured in `package.json`.
 For every change:
 - Run `pnpm lint`.
+- Run `pnpm test:mock` for backend/session sanity verification.
 - Manually validate key flows: `/setup` phone capture, `/` call flow, and API validation behavior in `POST /api/call`.
-If you add automated tests, use `*.test.ts` / `*.test.tsx` naming and document the new command in `package.json` and this guide.
 
 ## Commit & Pull Request Guidelines
 Recent history follows concise conventional prefixes (for example `feat:` and `fix:`). Continue that pattern:

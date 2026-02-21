@@ -1,6 +1,6 @@
 # The Scam Detective Hotline
 
-A hackathon project that helps people pause before they get scammed. Users submit their phone number, tap **Open a Case**, and receive a callback from an AI detective assistant for a fast second opinion.
+A hackathon project that helps people pause before they get scammed. Users submit their phone number, tap **Start Silent Monitor**, and receive a callback that streams live transcript to an on-screen scam coach.
 
 ## Project Goal
 We chose this project because AI-enabled scams amplify already widespread, underreported extortion and impersonation fraud: the FBI’s IC3 reported 39,416 extortion victims with about $54.3M in losses in 2022, and 14,190 government impersonation scam victims with over $394M in losses in 2023, with older adults disproportionately harmed ([FBI ICR](https://www.ic3.gov/AnnualReport/Reports/2022_ic3report.pdf), [FBI](https://www.fbi.gov/contact-us/field-offices/portland/news/fbi-warns-public-to-beware-of-scammers-impersonating-fbi-agents-and-other-government-officials)). Our goal was to build a practical tool that helps people pause and verify during high-pressure scam situations.
@@ -31,8 +31,8 @@ This project was built with a hybrid workflow:
 
 ## Features
 - Guided setup flow to capture and normalize user phone numbers
-- E.164 phone validation and masking utilities
-- One-tap case flow with clear states: idle, dialing, success, error
+- Silent monitor call flow with live transcript ingestion
+- Real-time scam risk scoring and concise coaching prompts
 - Server-side call initiation with safe error handling
 
 ## Getting Started
@@ -65,6 +65,14 @@ Create `.env.local` with at least:
 VAPI_PRIVATE_KEY=...
 VAPI_ASSISTANT_ID=...
 VAPI_PHONE_NUMBER_ID=...
+GROQ_API_KEY=...
+```
+
+Optional hardening:
+
+```bash
+VAPI_WEBHOOK_SECRET=...
+GROQ_MODEL=llama-3.3-70b-versatile
 ```
 
 Supabase-related variables may also be required for backend features (for example `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and service credentials) depending on your environment.

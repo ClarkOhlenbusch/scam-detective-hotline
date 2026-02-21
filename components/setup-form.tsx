@@ -57,7 +57,7 @@ export function SetupForm({ slug }: { slug: string }) {
     >
       <div className="flex flex-col gap-2">
         <Label htmlFor="phone" className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
-          Your Phone Number
+          Your Protected Number
         </Label>
         <Input
           id="phone"
@@ -72,7 +72,7 @@ export function SetupForm({ slug }: { slug: string }) {
           className="h-12 border-border bg-secondary font-mono text-base text-foreground placeholder:text-muted-foreground focus-visible:ring-primary"
         />
         <p className="font-mono text-xs text-muted-foreground">
-          {'Use +countrycode format if possible. Example: +14155552671'}
+          {'This is the number we call to start silent monitoring. Example: +14155552671'}
         </p>
       </div>
 
