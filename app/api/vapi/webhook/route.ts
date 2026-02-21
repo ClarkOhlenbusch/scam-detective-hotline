@@ -8,6 +8,7 @@ import {
   setCallStatus,
 } from '@/lib/live-call-session'
 import { parseVapiEvent } from '@/lib/vapi-events'
+import { muteAssistantByControlUrl } from '@/lib/vapi-control'
 
 export const runtime = 'nodejs'
 
@@ -27,40 +28,6 @@ function hasValidWebhookSecret(request: NextRequest): boolean {
   }
 
   return false
-}
-
-async function muteAssistant(controlUrl: string): Promise<boolean> {
-  const payload = JSON.stringify({ control: 'mute-assistant' })
-
-  const response = await fetch(controlUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    signal: AbortSignal.timeout(5_000),
-    body: payload,
-  })
-
-  if (response.ok) {
-    return true
-  }
-
-  const vapiKey = process.env.VAPI_PRIVATE_KEY
-  if (!vapiKey) {
-    return false
-  }
-
-  const retry = await fetch(controlUrl, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${vapiKey}`,
-      'Content-Type': 'application/json',
-    },
-    signal: AbortSignal.timeout(5_000),
-    body: payload,
-  })
-
-  return retry.ok
 }
 
 export async function POST(request: NextRequest) {
@@ -113,7 +80,10 @@ export async function POST(request: NextRequest) {
   }
 
   if (event.controlUrl && !isAssistantMuted(event.callId)) {
-    const muted = await muteAssistant(event.controlUrl).catch(() => false)
+    const muted = await muteAssistantByControlUrl(
+      event.controlUrl,
+      process.env.VAPI_PRIVATE_KEY,
+    ).catch(() => false)
     if (muted) {
       setAssistantMuted(event.callId, true)
     }

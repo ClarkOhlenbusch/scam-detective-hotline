@@ -73,6 +73,10 @@ export function parseVapiEvent(payload: unknown): ParsedVapiEvent {
 
   const message = asRecord(root.message)
   const callRecord = extractCallRecord(root, message)
+  const callAssistantOverrides = asRecord(callRecord?.assistantOverrides)
+  const callAssistantOverridesMetadata = asRecord(callAssistantOverrides?.metadata)
+  const callAssistant = asRecord(callRecord?.assistant)
+  const callAssistantMetadata = asRecord(callAssistant?.metadata)
   const callMetadata = asRecord(callRecord?.metadata)
   const rootMetadata = asRecord(root.metadata)
   const monitor = asRecord(callRecord?.monitor) ?? asRecord(root.monitor)
@@ -94,7 +98,12 @@ export function parseVapiEvent(payload: unknown): ParsedVapiEvent {
 
   const error = readString(root.error, message?.error)
 
-  const slug = readString(callMetadata?.slug, rootMetadata?.slug)
+  const slug = readString(
+    callMetadata?.slug,
+    callAssistantOverridesMetadata?.slug,
+    callAssistantMetadata?.slug,
+    rootMetadata?.slug,
+  )
 
   const controlUrl = readString(monitor?.controlUrl)
 

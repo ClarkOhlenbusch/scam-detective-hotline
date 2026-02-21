@@ -2,35 +2,41 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isValidE164 } from '@/lib/phone'
 import { getClientIp, takeCooldown, takeRateLimit } from '@/lib/rate-limit'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { createCallSession } from '@/lib/live-call-session'
+import { createCallSession, setAssistantMuted } from '@/lib/live-call-session'
+import { muteAssistantByControlUrl } from '@/lib/vapi-control'
 
-async function tryMuteAssistant(controlUrl: string, vapiKey: string) {
-  const payload = JSON.stringify({ control: 'mute-assistant' })
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
 
-  const response = await fetch(controlUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: payload,
-    signal: AbortSignal.timeout(5_000),
-  })
-
-  if (response.ok) {
-    return true
-  }
-
-  const retry = await fetch(controlUrl, {
-    method: 'POST',
+async function fetchControlUrlFromCall(callId: string, vapiKey: string): Promise<string | null> {
+  const response = await fetch(`https://api.vapi.ai/call/${encodeURIComponent(callId)}`, {
+    method: 'GET',
     headers: {
       Authorization: `Bearer ${vapiKey}`,
       'Content-Type': 'application/json',
     },
-    body: payload,
-    signal: AbortSignal.timeout(5_000),
+    signal: AbortSignal.timeout(6_000),
   })
 
-  return retry.ok
+  if (!response.ok) return null
+
+  const payload = await response.json().catch(() => null)
+  return typeof payload?.monitor?.controlUrl === 'string' ? payload.monitor.controlUrl : null
+}
+
+async function waitForControlUrl(callId: string, vapiKey: string): Promise<string | null> {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const controlUrl = await fetchControlUrlFromCall(callId, vapiKey)
+
+    if (controlUrl) {
+      return controlUrl
+    }
+
+    await wait(250)
+  }
+
+  return null
 }
 
 export async function POST(request: NextRequest) {
@@ -111,6 +117,15 @@ export async function POST(request: NextRequest) {
         phoneNumberId,
         customer: { number: phoneNumber },
         assistantOverrides: {
+          firstMessageMode: 'assistant-waits-for-user',
+          firstMessage: '',
+          startSpeakingPlan: {
+            waitSeconds: 5,
+          },
+          monitorPlan: {
+            controlEnabled: true,
+            listenEnabled: true,
+          },
           server: {
             url: serverUrl,
             ...(webhookSecret
@@ -155,11 +170,15 @@ export async function POST(request: NextRequest) {
       status: callStatus,
     })
 
-    const monitorControlUrl =
+    const immediateControlUrl =
       typeof data?.monitor?.controlUrl === 'string' ? data.monitor.controlUrl : null
+    const monitorControlUrl = immediateControlUrl ?? (await waitForControlUrl(callId, vapiKey))
 
     if (monitorControlUrl) {
-      void tryMuteAssistant(monitorControlUrl, vapiKey).catch(() => undefined)
+      const muted = await muteAssistantByControlUrl(monitorControlUrl, vapiKey).catch(() => false)
+      if (muted) {
+        setAssistantMuted(callId, true)
+      }
     }
 
     return NextResponse.json({
