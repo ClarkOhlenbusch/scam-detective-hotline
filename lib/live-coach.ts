@@ -7,7 +7,7 @@ const parsedAdviceSchema = z.object({
   feedback: z.string().min(1).max(220),
   whatToSay: z.string().min(1).max(220),
   whatToDo: z.string().min(1).max(220),
-  nextSteps: z.array(z.string().min(1).max(120)).max(3).default([]),
+  nextSteps: z.array(z.string().min(1).max(120)).max(2).default([]),
   confidence: z.number().min(0).max(1).optional(),
 })
 
@@ -32,11 +32,15 @@ const MEDIUM_RISK_PATTERNS = [
 ]
 
 const RISK_SYSTEM_PROMPT = [
-  'You are a real-time anti-scam call coach.',
+  'You are a real-time anti-scam call coach for older adults.',
   'Input is a running transcript between a caller (user) and another party.',
   'Return JSON only, no markdown.',
-  'Keep advice short, concrete, and calm.',
+  'Keep advice short, concrete, calm, and action-first.',
   'Rules: never advise sharing personal data, passwords, codes, or payments.',
+  'Focus: "whatToDo" must be one clear action the user can take right now.',
+  '"nextSteps" is action history on screen: include at most 2 short older actions.',
+  'Scoring nuance: only raise risk sharply when there is concrete scam evidence.',
+  'If evidence is mixed or uncertain, avoid dramatic score jumps and lower confidence.',
   'Output fields:',
   '{',
   '  "riskScore": number 0-100,',
@@ -44,7 +48,7 @@ const RISK_SYSTEM_PROMPT = [
   '  "feedback": short sentence with current risk read,',
   '  "whatToSay": one sentence user can say right now,',
   '  "whatToDo": one sentence action user should take now,',
-  '  "nextSteps": array of up to 3 short items,',
+  '  "nextSteps": array of up to 2 short items,',
   '  "confidence": number 0-1',
   '}',
 ].join('\n')
@@ -121,6 +125,79 @@ function parseRetryAfterMs(headerValue: string | null): number | null {
   }
 
   return null
+}
+
+function normalizeActionText(value: string): string {
+  return value.replace(/\s+/g, ' ').trim()
+}
+
+function buildActionQueue(nextAdvice: CoachingAdvice, previousAdvice?: CoachingAdvice): string[] {
+  const queue: string[] = []
+  const seen = new Set<string>()
+  const fallback = createDefaultAdvice().whatToDo
+
+  function add(value: string | undefined | null) {
+    if (!value) return
+
+    const normalized = normalizeActionText(value)
+    if (!normalized) return
+
+    const key = normalized.toLowerCase()
+    if (seen.has(key)) return
+
+    seen.add(key)
+    queue.push(normalized)
+  }
+
+  add(nextAdvice.whatToDo)
+
+  if (previousAdvice) {
+    add(previousAdvice.whatToDo)
+    for (const step of previousAdvice.nextSteps) {
+      add(step)
+    }
+  }
+
+  for (const step of nextAdvice.nextSteps) {
+    add(step)
+  }
+
+  if (queue.length === 0) {
+    queue.push(fallback)
+  }
+
+  return queue.slice(0, 3)
+}
+
+function smoothRiskScore(params: {
+  nextScore: number
+  confidence: number
+  previousAdvice?: CoachingAdvice
+}): number {
+  const targetScore = clamp(Math.round(params.nextScore), 0, 100)
+  const previous = params.previousAdvice
+
+  if (!previous) {
+    return targetScore
+  }
+
+  const previousScore = clamp(Math.round(previous.riskScore), 0, 100)
+  const delta = targetScore - previousScore
+
+  if (delta === 0) {
+    return previousScore
+  }
+
+  const confidence = clamp(params.confidence, 0, 1)
+  const baseMaxStep = confidence >= 0.75 ? 18 : confidence >= 0.55 ? 14 : 10
+  const crossingHighRisk = previousScore < 70 && targetScore >= 70
+  const maxStep = crossingHighRisk ? Math.max(baseMaxStep, 22) : baseMaxStep
+
+  if (Math.abs(delta) <= maxStep) {
+    return targetScore
+  }
+
+  return clamp(previousScore + Math.sign(delta) * maxStep, 0, 100)
 }
 
 function buildHeuristicAdvice(transcript: TranscriptChunk[], previousAdvice?: CoachingAdvice): CoachingAdvice {
@@ -203,6 +280,30 @@ function sanitizeAdvice(parsed: z.infer<typeof parsedAdviceSchema>): CoachingAdv
   }
 }
 
+export function stabilizeAdvice(params: {
+  nextAdvice: CoachingAdvice
+  previousAdvice?: CoachingAdvice
+}): CoachingAdvice {
+  const { nextAdvice, previousAdvice } = params
+  const confidence = clamp(nextAdvice.confidence, 0, 1)
+  const stabilizedRiskScore = smoothRiskScore({
+    nextScore: nextAdvice.riskScore,
+    confidence,
+    previousAdvice,
+  })
+  const actionQueue = buildActionQueue(nextAdvice, previousAdvice)
+
+  return {
+    ...nextAdvice,
+    riskScore: stabilizedRiskScore,
+    riskLevel: getRiskLevel(stabilizedRiskScore),
+    whatToDo: actionQueue[0],
+    nextSteps: actionQueue.slice(1, 3),
+    confidence,
+    updatedAt: Date.now(),
+  }
+}
+
 export function generateHeuristicAdvice(params: {
   transcript: TranscriptChunk[]
   previousAdvice?: CoachingAdvice
@@ -219,8 +320,9 @@ export function generateHeuristicAdvice(params: {
 
 export async function generateModelAdvice(params: {
   transcript: TranscriptChunk[]
+  previousAdvice?: CoachingAdvice
 }): Promise<CoachingAdvice | null> {
-  const { transcript } = params
+  const { transcript, previousAdvice } = params
   const recentTranscript = getRecentTranscript(transcript)
 
   if (recentTranscript.length === 0) {
@@ -235,6 +337,15 @@ export async function generateModelAdvice(params: {
   }
 
   const transcriptBlock = formatTranscriptForModel(recentTranscript)
+  const previousAdviceBlock = previousAdvice
+    ? JSON.stringify({
+        riskScore: previousAdvice.riskScore,
+        riskLevel: previousAdvice.riskLevel,
+        whatToDo: previousAdvice.whatToDo,
+        nextSteps: previousAdvice.nextSteps,
+        confidence: previousAdvice.confidence,
+      })
+    : 'none'
 
   try {
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -246,8 +357,8 @@ export async function generateModelAdvice(params: {
       signal: AbortSignal.timeout(8_000),
       body: JSON.stringify({
         model,
-        temperature: 0.2,
-        max_tokens: 220,
+        temperature: 0.15,
+        max_tokens: 240,
         messages: [
           {
             role: 'system',
@@ -256,6 +367,9 @@ export async function generateModelAdvice(params: {
           {
             role: 'user',
             content: [
+              'Previous advice snapshot (for continuity):',
+              previousAdviceBlock,
+              '',
               'Conversation transcript (latest chunk at bottom):',
               transcriptBlock,
               '',
@@ -297,14 +411,25 @@ export async function generateLiveAdvice(params: {
   transcript: TranscriptChunk[]
   previousAdvice?: CoachingAdvice
 }): Promise<CoachingAdvice> {
-  const heuristic = generateHeuristicAdvice(params)
+  const heuristic = stabilizeAdvice({
+    nextAdvice: generateHeuristicAdvice(params),
+    previousAdvice: params.previousAdvice,
+  })
 
   try {
     const modelAdvice = await generateModelAdvice({
       transcript: params.transcript,
+      previousAdvice: params.previousAdvice,
     })
 
-    return modelAdvice ?? heuristic
+    if (!modelAdvice) {
+      return heuristic
+    }
+
+    return stabilizeAdvice({
+      nextAdvice: modelAdvice,
+      previousAdvice: heuristic,
+    })
   } catch {
     return heuristic
   }

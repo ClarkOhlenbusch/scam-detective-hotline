@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   AlertTriangle,
@@ -77,13 +77,6 @@ function isTerminalStatus(status: string): boolean {
     normalized.includes('fail') ||
     normalized.includes('error')
   )
-}
-
-function formatSpeakerLabel(speaker: TranscriptLine['speaker']): string {
-  if (speaker === 'caller') return 'You'
-  if (speaker === 'other') return 'Caller'
-  if (speaker === 'assistant') return 'Assistant'
-  return 'Unknown'
 }
 
 function formatStatusLabel(status: string): string {
@@ -164,6 +157,27 @@ function mergeTranscriptLine(lines: TranscriptLine[], nextLine: TranscriptLine):
   return merged.slice(-MAX_TRANSCRIPT_LINES)
 }
 
+function normalizeActionItems(advice: LiveAdvice): string[] {
+  const values = [advice.whatToDo, ...advice.nextSteps]
+  const deduped: string[] = []
+  const seen = new Set<string>()
+
+  for (const value of values) {
+    const trimmed = value.trim()
+    if (!trimmed) continue
+    const key = trimmed.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    deduped.push(trimmed)
+  }
+
+  if (deduped.length > 0) {
+    return deduped.slice(0, 3)
+  }
+
+  return [createDefaultAdvice().whatToDo]
+}
+
 export function CasePanel({ slug, maskedPhone }: { slug: string; maskedPhone: string }) {
   const [panelState, setPanelState] = useState<PanelState>('idle')
   const [callId, setCallId] = useState<string | null>(null)
@@ -175,9 +189,11 @@ export function CasePanel({ slug, maskedPhone }: { slug: string; maskedPhone: st
   const [lastUpdated, setLastUpdated] = useState<number | null>(null)
   const [advice, setAdvice] = useState<LiveAdvice>(createDefaultAdvice())
   const [transcript, setTranscript] = useState<TranscriptLine[]>([])
+  const transcriptViewportRef = useRef<HTMLDivElement | null>(null)
 
   const storageKey = `${STORAGE_KEY_PREFIX}${slug}`
   const supabase = useMemo(() => createClient(), [])
+  const actionItems = useMemo(() => normalizeActionItems(advice), [advice])
 
   useEffect(() => {
     const existingCallId = window.sessionStorage.getItem(storageKey)
@@ -381,11 +397,23 @@ export function CasePanel({ slug, maskedPhone }: { slug: string; maskedPhone: st
     }
   }, [callId, slug, storageKey, supabase])
 
+  useEffect(() => {
+    if (transcript.length === 0) return
+    const viewport = transcriptViewportRef.current
+    if (!viewport) return
+
+    viewport.scrollTo({
+      top: viewport.scrollHeight,
+      behavior: 'smooth',
+    })
+  }, [transcript])
+
   const riskTheme = useMemo(() => {
     if (advice.riskLevel === 'high') {
       return {
         card: 'border-destructive/40 bg-destructive/10',
         label: 'text-destructive',
+        meter: 'bg-destructive',
         Icon: ShieldAlert,
       }
     }
@@ -394,6 +422,7 @@ export function CasePanel({ slug, maskedPhone }: { slug: string; maskedPhone: st
       return {
         card: 'border-amber-500/40 bg-amber-500/10',
         label: 'text-amber-500',
+        meter: 'bg-amber-500',
         Icon: ShieldQuestion,
       }
     }
@@ -401,6 +430,7 @@ export function CasePanel({ slug, maskedPhone }: { slug: string; maskedPhone: st
     return {
       card: 'border-emerald-500/40 bg-emerald-500/10',
       label: 'text-emerald-500',
+      meter: 'bg-emerald-500',
       Icon: ShieldCheck,
     }
   }, [advice.riskLevel])
@@ -452,16 +482,27 @@ export function CasePanel({ slug, maskedPhone }: { slug: string; maskedPhone: st
   }
 
   return (
-    <div className="flex w-full max-w-sm flex-col items-center gap-5">
-      <div className="flex flex-col items-center gap-1">
-        <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
-          Protected Number
-        </p>
-        <p className="font-mono text-lg text-foreground">{maskedPhone}</p>
+    <div className="flex w-full max-w-md flex-col gap-4">
+      <div className="flex items-center justify-between rounded-xl border border-border bg-card/70 px-4 py-3">
+        <div className="flex flex-col gap-1">
+          <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Protected Number</p>
+          <p className="font-mono text-base text-foreground">{maskedPhone}</p>
+        </div>
+        {panelState !== 'idle' && (
+          <div className="text-right">
+            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Status</p>
+            <p className="font-mono text-xs uppercase tracking-widest text-foreground">
+              {panelState === 'starting' ? 'Starting' : formatStatusLabel(callStatus)}
+            </p>
+          </div>
+        )}
       </div>
 
       {panelState === 'idle' && (
-        <div className="flex w-full flex-col gap-3">
+        <div className="flex w-full flex-col gap-3 rounded-2xl border border-border bg-card/70 px-4 py-5">
+          <p className="font-mono text-sm leading-relaxed text-foreground">
+            Tap once to start silent coaching on suspicious calls.
+          </p>
           <Button
             onClick={handleStartMonitor}
             size="lg"
@@ -470,14 +511,14 @@ export function CasePanel({ slug, maskedPhone }: { slug: string; maskedPhone: st
             <Phone className="mr-2 h-5 w-5" />
             Start Silent Monitor
           </Button>
-          <p className="text-center font-mono text-xs text-muted-foreground">
-            We call you, listen silently, and coach you live on this screen.
+          <p className="font-mono text-xs text-muted-foreground">
+            Keep this screen open. Instructions update in real time.
           </p>
         </div>
       )}
 
       {panelState === 'starting' && (
-        <div className="flex w-full flex-col items-center gap-3 rounded-lg border border-border bg-card px-6 py-8">
+        <div className="flex w-full flex-col items-center gap-3 rounded-2xl border border-border bg-card px-6 py-8">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <p className="font-mono text-sm uppercase tracking-widest text-muted-foreground">Starting monitor...</p>
           <p className="text-center font-mono text-xs text-muted-foreground">
@@ -488,70 +529,93 @@ export function CasePanel({ slug, maskedPhone }: { slug: string; maskedPhone: st
 
       {(panelState === 'live' || panelState === 'ended') && (
         <div className="flex w-full flex-col gap-3">
-          <div className="rounded-lg border border-border bg-card px-4 py-3">
-            <div className="flex items-center justify-between">
-              <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">Call Status</p>
-              <p className="font-mono text-xs uppercase tracking-widest text-foreground">
+          <div className="rounded-2xl border border-border bg-card/80 px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
                 {formatStatusLabel(callStatus)}
-              </p>
-            </div>
-            <div className="mt-2 flex items-center justify-between">
-              <p className="font-mono text-xs text-muted-foreground">
-                Silent mode: {assistantMuted ? 'locked' : 'enabling...'}
               </p>
               <p className="font-mono text-xs text-muted-foreground">Updated {formatTime(lastUpdated)}</p>
             </div>
+            <p className="mt-2 font-mono text-xs text-muted-foreground">
+              Silent mode: {assistantMuted ? 'on' : 'starting'}
+            </p>
+            {analyzing && (
+              <p className="mt-1 font-mono text-xs text-muted-foreground">Reading the latest part of the call...</p>
+            )}
+            {caseNote && <p className="mt-2 font-mono text-sm text-foreground">{caseNote}</p>}
           </div>
 
-          <div className={`rounded-lg border px-4 py-4 ${riskTheme.card}`}>
-            <div className="flex items-center justify-between">
-              <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">Scam Risk</p>
-              <riskTheme.Icon className={`h-4 w-4 ${riskTheme.label}`} />
-            </div>
-            <div className="mt-2 flex items-end justify-between gap-2">
-              <p className={`font-mono text-3xl font-semibold ${riskTheme.label}`}>{advice.riskScore}/100</p>
-              <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
-                {advice.riskLevel}
-              </p>
-            </div>
-            <p className="mt-2 font-mono text-sm text-foreground">{advice.feedback}</p>
-          </div>
-
-          <div className="rounded-lg border border-border bg-card px-4 py-3">
-            <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">What To Say</p>
-            <p className="mt-2 font-mono text-sm text-foreground">{advice.whatToSay}</p>
-          </div>
-
-          <div className="rounded-lg border border-border bg-card px-4 py-3">
+          <div className="rounded-2xl border border-primary/40 bg-primary/10 px-4 py-4">
             <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">What To Do</p>
-            <p className="mt-2 font-mono text-sm text-foreground">{advice.whatToDo}</p>
-          </div>
-
-          {advice.nextSteps.length > 0 && (
-            <div className="rounded-lg border border-border bg-card px-4 py-3">
-              <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">Next Steps</p>
-              <div className="mt-2 flex flex-col gap-2">
-                {advice.nextSteps.map((item) => (
-                  <p key={item} className="font-mono text-xs text-foreground">
-                    • {item}
+            <div className="mt-3 flex flex-col gap-2">
+              {actionItems.map((item, index) => (
+                <div
+                  key={`${item}-${index}`}
+                  className={`flex items-start gap-3 rounded-xl border px-3 py-2 ${
+                    index === 0
+                      ? 'border-primary/50 bg-primary/15'
+                      : 'border-border/80 bg-card/60'
+                  }`}
+                >
+                  <span
+                    className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full font-mono text-xs ${
+                      index === 0
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-secondary text-muted-foreground'
+                    }`}
+                  >
+                    {index + 1}
+                  </span>
+                  <p
+                    className={`font-mono leading-relaxed ${
+                      index === 0 ? 'text-base text-foreground' : 'text-sm text-muted-foreground'
+                    }`}
+                  >
+                    {item}
                   </p>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="rounded-lg border border-border bg-card px-4 py-3">
-            <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">Live Transcript</p>
-            <div className="mt-2 flex max-h-36 flex-col gap-2 overflow-y-auto">
-              {transcript.length === 0 && (
-                <p className="font-mono text-xs text-muted-foreground">Waiting for live transcript...</p>
-              )}
-              {transcript.map((line) => (
-                <p key={line.id} className="font-mono text-xs text-foreground">
-                  <span className="text-muted-foreground">{formatSpeakerLabel(line.speaker)}:</span> {line.text}
-                </p>
+                </div>
               ))}
             </div>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-card px-3 py-3">
+            <p className="px-1 font-mono text-xs uppercase tracking-widest text-muted-foreground">Live Transcript</p>
+            <div
+              ref={transcriptViewportRef}
+              className="mt-3 flex h-[44dvh] min-h-[280px] flex-col gap-2 overflow-y-auto px-1 pb-1"
+            >
+              {transcript.length === 0 && (
+                <p className="mt-2 text-center font-mono text-sm text-muted-foreground">
+                  Waiting for live transcript...
+                </p>
+              )}
+              {transcript.map((line) => (
+                <div
+                  key={line.id}
+                  className="mx-auto w-full max-w-[95%] rounded-2xl border border-border/70 bg-secondary/80 px-4 py-3"
+                >
+                  <p className="text-center font-mono text-[15px] leading-relaxed text-foreground">{line.text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className={`rounded-2xl border px-4 py-4 ${riskTheme.card}`}>
+            <div className="flex items-center justify-between">
+              <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">Scam Probability</p>
+              <riskTheme.Icon className={`h-4 w-4 ${riskTheme.label}`} />
+            </div>
+            <div className="mt-2 flex items-end justify-between gap-3">
+              <p className={`font-mono text-3xl font-semibold ${riskTheme.label}`}>{advice.riskScore}%</p>
+              <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">{advice.riskLevel}</p>
+            </div>
+            <div className="mt-3 h-2 w-full rounded-full bg-background/70">
+              <div
+                className={`h-2 rounded-full transition-[width] duration-700 ease-out ${riskTheme.meter}`}
+                style={{ width: `${advice.riskScore}%` }}
+              />
+            </div>
+            <p className="mt-3 font-mono text-sm leading-relaxed text-foreground">{advice.feedback}</p>
           </div>
 
           <Button
@@ -567,7 +631,7 @@ export function CasePanel({ slug, maskedPhone }: { slug: string; maskedPhone: st
       )}
 
       {panelState === 'error' && (
-        <div className="flex w-full flex-col items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-6 py-8">
+        <div className="flex w-full flex-col items-center gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 px-6 py-8">
           <AlertTriangle className="h-8 w-8 text-destructive" />
           <p className="font-mono text-sm font-semibold uppercase tracking-widest text-destructive">Session Failed</p>
           <p className="text-center font-mono text-sm text-foreground">{error || 'Unable to start session.'}</p>
@@ -583,17 +647,15 @@ export function CasePanel({ slug, maskedPhone }: { slug: string; maskedPhone: st
         </div>
       )}
 
-      {caseNote && panelState !== 'starting' && (
-        <div className="w-full rounded-lg border border-border bg-card px-4 py-3">
-          <p className="mb-1 font-mono text-xs uppercase tracking-widest text-muted-foreground">Session Note</p>
+      {caseNote && panelState === 'idle' && (
+        <div className="w-full rounded-xl border border-border bg-card px-4 py-3">
           <p className="font-mono text-sm text-foreground">{caseNote}</p>
-          {analyzing && <p className="mt-2 font-mono text-xs text-muted-foreground">Analyzing latest transcript...</p>}
         </div>
       )}
 
       <Link
         href={`/t/${slug}/setup`}
-        className="font-mono text-xs uppercase tracking-widest text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+        className="self-center font-mono text-xs uppercase tracking-widest text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
       >
         Change number
       </Link>

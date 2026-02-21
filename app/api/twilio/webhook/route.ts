@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { ModelAdviceError, generateHeuristicAdvice, generateModelAdvice } from '@/lib/live-coach'
+import {
+  ModelAdviceError,
+  generateHeuristicAdvice,
+  generateModelAdvice,
+  stabilizeAdvice,
+} from '@/lib/live-coach'
 import {
   appendTranscriptChunk,
   getLiveCallSummary,
@@ -186,7 +191,15 @@ async function runAdviceCycle(callSid: string, state: AdviceRunState, forceModel
     return
   }
 
-  const heuristicAdvice = generateHeuristicAdvice({ transcript })
+  const previousAdvice = summary.lastAdviceAt ? summary.advice : undefined
+
+  const heuristicAdvice = stabilizeAdvice({
+    nextAdvice: generateHeuristicAdvice({
+      transcript,
+      previousAdvice,
+    }),
+    previousAdvice,
+  })
   await setLiveCallAdvice(callSid, heuristicAdvice, {
     lastError: null,
     analyzing: false,
@@ -205,7 +218,10 @@ async function runAdviceCycle(callSid: string, state: AdviceRunState, forceModel
   await setLiveCallAnalyzing(callSid, true).catch(() => {})
 
   try {
-    const modelAdvice = await generateModelAdvice({ transcript })
+    const modelAdvice = await generateModelAdvice({
+      transcript,
+      previousAdvice: heuristicAdvice,
+    })
 
     if (!modelAdvice) {
       state.lastModelRunAt = Date.now()
@@ -213,7 +229,12 @@ async function runAdviceCycle(callSid: string, state: AdviceRunState, forceModel
       return
     }
 
-    await setLiveCallAdvice(callSid, modelAdvice, {
+    const stabilizedModelAdvice = stabilizeAdvice({
+      nextAdvice: modelAdvice,
+      previousAdvice: heuristicAdvice,
+    })
+
+    await setLiveCallAdvice(callSid, stabilizedModelAdvice, {
       lastError: null,
       analyzing: false,
     })

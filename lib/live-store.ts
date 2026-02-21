@@ -58,7 +58,7 @@ function toAdvice(payload: unknown): CoachingAdvice {
   const riskScore = clamp(Math.round(riskScoreRaw), 0, 100)
 
   const nextSteps = Array.isArray(data.nextSteps)
-    ? data.nextSteps.filter((step): step is string => typeof step === 'string' && step.trim().length > 0).slice(0, 3)
+    ? data.nextSteps.filter((step): step is string => typeof step === 'string' && step.trim().length > 0).slice(0, 2)
     : fallback.nextSteps
 
   const riskLevel =
@@ -271,11 +271,12 @@ export async function getLiveCallSummary(callSid: string): Promise<{
   slug: string
   status: string
   lastAdviceAt: number | null
+  advice: CoachingAdvice
 } | null> {
   const supabase = createAdminClient()
   const { data, error } = await supabase
     .from('live_calls')
-    .select('call_sid, slug, status, last_advice_at')
+    .select('call_sid, slug, status, last_advice_at, advice')
     .eq('call_sid', callSid)
     .maybeSingle()
 
@@ -290,6 +291,7 @@ export async function getLiveCallSummary(callSid: string): Promise<{
     slug: String(data.slug),
     status: String(data.status),
     lastAdviceAt: data.last_advice_at ? Date.parse(String(data.last_advice_at)) : null,
+    advice: toAdvice(data.advice),
   }
 }
 
