@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isValidE164 } from '@/lib/phone'
+import { getClientIp, takeCooldown, takeRateLimit } from '@/lib/rate-limit'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export async function POST(request: NextRequest) {
@@ -11,6 +12,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { ok: false, error: 'Tenant slug is required.' },
         { status: 400 }
+      )
+    }
+
+    const ip = getClientIp(request)
+    if (!takeRateLimit(`call:ip:${ip}`, 5, 60_000)) {
+      return NextResponse.json(
+        { ok: false, error: 'Too many requests. Please wait a minute and try again.' },
+        { status: 429 }
+      )
+    }
+
+    const remainingSeconds = takeCooldown(`call:slug:${slug}`, 30_000)
+    if (remainingSeconds > 0) {
+      return NextResponse.json(
+        { ok: false, error: `A call was just placed. Try again in about ${remainingSeconds}s.` },
+        { status: 429 }
       )
     }
 
@@ -55,6 +72,7 @@ export async function POST(request: NextRequest) {
         Authorization: `Bearer ${vapiKey}`,
         'Content-Type': 'application/json',
       },
+      signal: AbortSignal.timeout(15_000),
       body: JSON.stringify({
         assistantId,
         phoneNumberId,
