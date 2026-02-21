@@ -97,6 +97,7 @@ export async function POST(request: NextRequest) {
     }
 
     const serverUrl = new URL('/api/vapi/webhook', request.url).toString()
+    const webhookSecret = process.env.VAPI_WEBHOOK_SECRET
 
     const vapiResponse = await fetch('https://api.vapi.ai/call', {
       method: 'POST',
@@ -109,9 +110,20 @@ export async function POST(request: NextRequest) {
         assistantId,
         phoneNumberId,
         customer: { number: phoneNumber },
-        serverUrl,
-        metadata: {
-          slug,
+        assistantOverrides: {
+          server: {
+            url: serverUrl,
+            ...(webhookSecret
+              ? {
+                  headers: {
+                    'x-vapi-secret': webhookSecret,
+                  },
+                }
+              : {}),
+          },
+          metadata: {
+            slug,
+          },
         },
       }),
     })
