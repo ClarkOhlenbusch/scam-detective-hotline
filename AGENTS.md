@@ -1,5 +1,7 @@
 # Repository Guidelines
 
+## Important Note: Do not update the ReadMe unless specifically instructed to do so
+
 ## Project Structure & Module Organization
 This project is a Next.js App Router app.
 - `app/`: routes, layouts, and API handlers (for example `app/api/call/route.ts`).
