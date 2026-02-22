@@ -1,4 +1,4 @@
-# Marlowe
+# Marlowe 🕵🏻
 
 A hackathon project that helps people pause before they get scammed. Users submit their phone number, tap **Start Silent Monitor**, and receive a callback that streams live transcript to an on-screen scam coach.
 
