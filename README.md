@@ -54,6 +54,20 @@ Here's what we actually pulled off this weekend:
 
 ---
 
+## Advice Stabilization Engine
+
+Real-time risk scoring is useless if the number jumps wildly every second. Marlowe's coaching pipeline includes a purpose-built **score stabilization layer** that prevents whiplash while still reacting quickly to genuine threats:
+
+- **Confidence-weighted dampening** — Each advice update carries a confidence score (0–1). Low-confidence updates are capped at smaller step sizes (±6 pts), while high-confidence updates can move up to ±11 pts per cycle. This prevents a single ambiguous transcript chunk from swinging the score.
+- **Band-crossing acceleration** — When evidence pushes the score across a risk boundary (e.g., low→medium at 40, or medium→high at 70), the step limit is temporarily raised so the UI reflects the transition without artificial lag.
+- **Asymmetric movement** — Upward score changes are allowed larger steps than downward ones. This is intentional: it's safer to warn too early than to retract a warning too quickly.
+- **Dead-zone filtering** — Score deltas of ≤3 points are suppressed entirely to avoid cosmetic flicker that adds no information.
+- **Action queue continuity** — The "what to do" and "next steps" fields maintain a deduplicated rolling history so the user always sees their current action plus recent context, even when the LLM generates new advice.
+
+The result: the risk score feels like a steady, trustworthy signal rather than a jittery number — critical when the user is an older adult on a stressful phone call.
+
+---
+
 ## Production-Grade Completeness
 
 - **End-to-end integration testing** — A full mock flow (`pnpm test:mock`) provisions a tenant, saves a phone number, fires simulated Twilio webhook events (both form-encoded and JSON), waits for the coaching pipeline to produce a risk score ≥ 40, verifies call-ended status propagation, and asserts the entire loop. It even computes valid Twilio HMAC-SHA1 signatures so the webhook auth path is exercised.
