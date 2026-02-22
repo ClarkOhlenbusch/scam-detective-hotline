@@ -18,18 +18,17 @@
 
 ---
 
-## 📱 App Preview
+## App Preview
 
-<!-- TODO: Replace with actual screenshot -->
 <p align="center">
-  <img src="public/placeholder.jpg" alt="Marlowe mobile app screenshot" width="300" />
+  <img src="public/marlowe_movie_1969.jpg" alt="Marlowe mobile app screenshot" width="300" />
   <br />
   <em>Screenshot coming soon — drop your mobile capture here.</em>
 </p>
 
 ---
 
-## 🔥 Why This Is More Than a Wrapper
+## Why This Is More Than a Wrapper
 
 Most "AI scam detector" demos paste text into a chatbot and call it a day. Marlowe is fundamentally different — we built a **live telephony feedback loop** that works on real phone calls, including iPhone calls that are normally completely gated from third-party access.
 
@@ -49,7 +48,7 @@ This isn't a chatbot. It's a **real-time telephony intelligence system** built i
 
 ---
 
-## 🛡️ Production-Grade Completeness
+## Production-Grade Completeness
 
 Despite being a hackathon build, Marlowe ships with real production hardening:
 
@@ -64,7 +63,7 @@ Despite being a hackathon build, Marlowe ships with real production hardening:
 
 ---
 
-## 🎯 The Problem
+## The Problem
 
 AI-enabled scams are amplifying already widespread fraud:
 
@@ -76,7 +75,7 @@ Scammers use urgency, fear, and isolation to prevent victims from pausing to thi
 
 ---
 
-## ⚙️ How It Works
+## How It Works
 
 ```
 User enters phone number → Marlowe calls them back via Twilio
@@ -95,7 +94,7 @@ User enters phone number → Marlowe calls them back via Twilio
 
 ---
 
-## 🏗️ Tech Stack
+## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
@@ -108,7 +107,7 @@ User enters phone number → Marlowe calls them back via Twilio
 
 ---
 
-## 👥 Team
+## Team
 
 | Name | Role | Contribution |
 |------|------|-------------|
@@ -118,7 +117,7 @@ User enters phone number → Marlowe calls them back via Twilio
 
 ---
 
-## 🛠️ Hackathon Build Notes
+## Hackathon Build Notes
 
 Built in a weekend with a hybrid workflow:
 
@@ -194,7 +193,7 @@ Notes:
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 app/                          # Routes, layouts, API handlers
@@ -215,7 +214,7 @@ public/                       # Static assets + logo
 
 ---
 
-## 🧪 Testing
+## Testing
 
 ```bash
 pnpm lint                # ESLint
@@ -226,19 +225,19 @@ pnpm test:mock           # End-to-end mock call/transcript sanity flow
 
 ---
 
-## 🌐 Deployment
+## Deployment
 
 Configured for Vercel. Import the repo into Vercel, set the environment variables above, run the SQL migrations in Supabase, and verify Twilio can reach your deployed `/api/twilio/webhook` endpoint.
 
 ---
 
-## 💭 Reflection
+## Reflection
 
-Our main challenge was designing something people could realistically use during a high-stress scam call — so we focused on a simple, fast user flow. We also attended Lucas Maley's PM workshop, which helped us think more clearly about product design and feature prioritization.
+Our main challenge was designing something people could realistically use during a high-stress scam call, so we focused on a simple, fast user flow. We also attended Lucas Maley’s PM workshop, which helped us think more clearly about product design and feature prioritization.
 
 ---
 
-## 📄 License
+## License
 
 This project was created as a hackathon prototype and is provided for demonstration purposes only.
 
