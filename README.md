@@ -17,7 +17,6 @@
 </p>
 
 ---
-> **Name inspiration:** *Marlowe* (1969), a neo-noir detective film starring James Garner.
 
 <p>
   <img src="public/marlowe_movie_1969.jpg" alt="Marlowe (1969) poster inspiration" width="120" />
@@ -37,9 +36,9 @@ Scammers use **urgency, fear, and isolation** to prevent victims from pausing to
 
 ---
 
-## Why This Is More Than a Wrapper
+## The Solution
 <img src="./public/marlowe_movie_1969.jpg" alt="Marlowe (1969) poster inspiration" width="110" align="right" />
-Most "AI scam detector" demos paste text into a chatbot and call it a day. Marlowe is fundamentally different — we built a **live telephony feedback loop** that works on real phone calls, including iPhone calls that are normally completely gated from third-party access.
+We built Marlowe, a **live telephony feedback loop** that works on real phone calls, including iPhone calls that are normally completely gated from third-party access.
 
 Here's what we actually pulled off this weekend:
 
@@ -53,13 +52,9 @@ Here's what we actually pulled off this weekend:
 
 4. **Self-healing call loop** — The TwiML uses a `<Pause>` + `<Redirect>` pattern to keep the transcription session alive indefinitely without dropping the call, automatically re-upping the connection every 60 seconds.
 
-This isn't a chatbot. It's a **real-time telephony intelligence system** built in a weekend.
-
 ---
 
 ## Production-Grade Completeness
-
-Despite being a hackathon build, Marlowe ships with real production hardening:
 
 - **End-to-end integration testing** — A full mock flow (`pnpm test:mock`) provisions a tenant, saves a phone number, fires simulated Twilio webhook events (both form-encoded and JSON), waits for the coaching pipeline to produce a risk score ≥ 40, verifies call-ended status propagation, and asserts the entire loop. It even computes valid Twilio HMAC-SHA1 signatures so the webhook auth path is exercised.
 - **Twilio webhook signature validation** — HMAC-SHA1 verification on every inbound webhook, with URL candidate generation to handle proxy/forwarding edge cases and constant-time comparison to prevent timing attacks.
@@ -72,7 +67,7 @@ Despite being a hackathon build, Marlowe ships with real production hardening:
 
 ---
 
-## How It Works
+## Work Flow
 
 ```
 User enters phone number → Marlowe calls them back via Twilio
@@ -102,6 +97,15 @@ User enters phone number → Marlowe calls them back via Twilio
 | Realtime Data | Supabase Postgres + Supabase Realtime + `@supabase/ssr` |
 | Deployment | Vercel + Vercel Analytics |
 
+Built in a weekend with a hybrid workflow:
+
+- **Vercel v0** — framework + initial skeleton
+- **Handwritten code** — core telephony pipeline, webhook handling, coaching engine
+- **AI-assisted iteration** — Codex, Claude Code, Gemini CLI, Kiro CLI
+- **Supabase** — backend services, Realtime, Postgres
+- **Twilio** — outbound calls + live transcription
+- **Groq** — real-time LLM coaching on transcript chunks
+
 ---
 
 ## Team
@@ -114,20 +118,7 @@ User enters phone number → Marlowe calls them back via Twilio
 
 ---
 
-## Hackathon Build Notes
-
-Built in a weekend with a hybrid workflow:
-
-- **Vercel v0** — framework + initial skeleton
-- **Handwritten code** — core telephony pipeline, webhook handling, coaching engine
-- **AI-assisted iteration** — Codex, Claude Code, Gemini CLI, Kiro CLI
-- **Supabase** — backend services, Realtime, Postgres
-- **Twilio** — outbound calls + live transcription
-- **Groq** — real-time LLM coaching on transcript chunks
-
----
-
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 - Node.js 20+
