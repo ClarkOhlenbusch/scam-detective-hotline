@@ -25,8 +25,25 @@
 
 ---
 
-## Why This Is More Than a Wrapper
+## The Problem
 
+AI-enabled scams are amplifying already widespread fraud:
+
+- The FBI's IC3 reported **39,416 extortion victims** with ~$54.3M in losses in 2022 ([FBI IC3 Report](https://www.ic3.gov/AnnualReport/Reports/2022_ic3report.pdf))
+- **14,190 government impersonation scam victims** with over $394M in losses in 2023 ([FBI](https://www.fbi.gov/contact-us/field-offices/portland/news/fbi-warns-public-to-beware-of-scammers-impersonating-fbi-agents-and-other-government-officials))
+- Older adults are disproportionately harmed
+
+Scammers use **urgency, fear, and isolation** to prevent victims from pausing to think. Marlowe gives people a **live second opinion** during the call itself — before they send money, share credentials, or comply with threats.
+
+---
+
+## Why This Is More Than a Wrapper
+<img
+  src="./public/marlowe_movie_1969.jpg"
+  alt="Marlowe (1969) poster inspiration"
+  width="110"
+  align="right"
+/>
 Most "AI scam detector" demos paste text into a chatbot and call it a day. Marlowe is fundamentally different — we built a **live telephony feedback loop** that works on real phone calls, including iPhone calls that are normally completely gated from third-party access.
 
 Here's what we actually pulled off this weekend:
@@ -57,18 +74,6 @@ Despite being a hackathon build, Marlowe ships with real production hardening:
 - **Input validation everywhere** — E.164 phone normalization with US shorthand support, slug format validation, XML escaping in TwiML generation, and structured Zod schemas for LLM response parsing.
 - **Database migrations** — Versioned SQL scripts for schema creation, Realtime publication setup, and demo tenant seeding.
 - **Linting** — ESLint across the full codebase (`pnpm lint`).
-
----
-
-## The Problem
-
-AI-enabled scams are amplifying already widespread fraud:
-
-- The FBI's IC3 reported **39,416 extortion victims** with ~$54.3M in losses in 2022 ([FBI IC3 Report](https://www.ic3.gov/AnnualReport/Reports/2022_ic3report.pdf))
-- **14,190 government impersonation scam victims** with over $394M in losses in 2023 ([FBI](https://www.fbi.gov/contact-us/field-offices/portland/news/fbi-warns-public-to-beware-of-scammers-impersonating-fbi-agents-and-other-government-officials))
-- Older adults are disproportionately harmed
-
-Scammers use urgency, fear, and isolation to prevent victims from pausing to think. Marlowe gives people a **live second opinion** during the call itself — before they send money, share credentials, or comply with threats.
 
 ---
 
