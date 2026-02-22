@@ -14,7 +14,7 @@ import {
   setLiveCallStatus,
   upsertLiveCallSession,
 } from '@/lib/live-store'
-import { isTerminalStatus, normalizeSessionStatus } from '@/lib/live-types'
+import { CoachingAdvice, isTerminalStatus, normalizeSessionStatus } from '@/lib/live-types'
 import { getTwilioConfig } from '@/lib/twilio-api'
 import {
   buildTwilioUrlCandidates,
@@ -49,6 +49,7 @@ type AdviceRunState = {
   pending: boolean
   forceModel: boolean
   lastAdviceTriggerAt: number
+  lastStableAdvice: CoachingAdvice | null
   lastModelRunAt: number
   modelCooldownUntil: number
   rateLimitStreak: number
@@ -103,6 +104,7 @@ function runAdviceForCall(callSid: string, force = false) {
     pending: false,
     forceModel: false,
     lastAdviceTriggerAt: 0,
+    lastStableAdvice: null,
     lastModelRunAt: 0,
     modelCooldownUntil: 0,
     rateLimitStreak: 0,
@@ -199,12 +201,16 @@ async function runAdviceCycle(callSid: string, state: AdviceRunState, forceModel
   const callEnded = isTerminalStatus(normalizedStatus)
   state.terminal = callEnded
 
+  if (!state.lastStableAdvice && summary.lastAdviceAt) {
+    state.lastStableAdvice = summary.advice
+  }
+
   const transcript = await getTranscriptChunks(callSid, ADVICE_TRANSCRIPT_LIMIT)
   if (transcript.length === 0) {
     return
   }
 
-  const previousAdvice = summary.lastAdviceAt ? summary.advice : undefined
+  const previousAdvice = state.lastStableAdvice ?? (summary.lastAdviceAt ? summary.advice : undefined)
 
   const heuristicAdvice = stabilizeAdvice({
     nextAdvice: generateHeuristicAdvice({
@@ -213,16 +219,26 @@ async function runAdviceCycle(callSid: string, state: AdviceRunState, forceModel
     }),
     previousAdvice,
   })
-  await setLiveCallAdvice(callSid, heuristicAdvice, {
-    lastError: null,
-    analyzing: false,
-  }).catch(() => {})
 
   const now = Date.now()
   const shouldRunModel =
     HAS_GROQ_MODEL &&
     now >= state.modelCooldownUntil &&
     (forceModel || callEnded || now - state.lastModelRunAt >= MODEL_MIN_INTERVAL_MS)
+
+  const shouldPublishHeuristic =
+    !HAS_GROQ_MODEL ||
+    state.lastModelRunAt === 0 ||
+    !state.lastStableAdvice ||
+    now < state.modelCooldownUntil
+
+  if (shouldPublishHeuristic) {
+    await setLiveCallAdvice(callSid, heuristicAdvice, {
+      lastError: null,
+      analyzing: false,
+    }).catch(() => {})
+    state.lastStableAdvice = heuristicAdvice
+  }
 
   if (!shouldRunModel) {
     return
@@ -231,26 +247,33 @@ async function runAdviceCycle(callSid: string, state: AdviceRunState, forceModel
   await setLiveCallAnalyzing(callSid, true).catch(() => {})
 
   try {
+    const modelBaselineAdvice = state.lastStableAdvice ?? heuristicAdvice
     const modelAdvice = await generateModelAdvice({
       transcript,
-      previousAdvice: heuristicAdvice,
+      previousAdvice: modelBaselineAdvice,
     })
 
     if (!modelAdvice) {
       state.lastModelRunAt = Date.now()
+      state.lastStableAdvice = heuristicAdvice
+      await setLiveCallAdvice(callSid, heuristicAdvice, {
+        lastError: null,
+        analyzing: false,
+      }).catch(() => {})
       await setLiveCallAnalyzing(callSid, false).catch(() => {})
       return
     }
 
     const stabilizedModelAdvice = stabilizeAdvice({
       nextAdvice: modelAdvice,
-      previousAdvice: heuristicAdvice,
+      previousAdvice: modelBaselineAdvice,
     })
 
     await setLiveCallAdvice(callSid, stabilizedModelAdvice, {
       lastError: null,
       analyzing: false,
     })
+    state.lastStableAdvice = stabilizedModelAdvice
     state.lastModelRunAt = Date.now()
     state.modelCooldownUntil = 0
     state.rateLimitStreak = 0
@@ -268,6 +291,7 @@ async function runAdviceCycle(callSid: string, state: AdviceRunState, forceModel
       lastError: backoffMs > 0 ? ADVICE_RATE_LIMITED_MESSAGE : ADVICE_DELAYED_MESSAGE,
       analyzing: false,
     }).catch(() => {})
+    state.lastStableAdvice = heuristicAdvice
   }
 }
 

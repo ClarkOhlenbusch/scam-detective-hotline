@@ -41,6 +41,10 @@ const RISK_SYSTEM_PROMPT = [
   '"nextSteps" is action history on screen: include at most 2 short older actions.',
   'Scoring nuance: only raise risk sharply when there is concrete scam evidence.',
   'If evidence is mixed or uncertain, avoid dramatic score jumps and lower confidence.',
+  'Continuity rule: keep the same reasoning unless new concrete evidence appears.',
+  'Score movement rule: usually change riskScore by at most 8 points per update.',
+  'Only exceed that when there is explicit scam evidence like OTP requests, payment demands, credential harvesting, remote access, legal threats, or urgency with secrecy.',
+  'If there is no meaningful new evidence, keep riskScore near previous riskScore.',
   'Output fields:',
   '{',
   '  "riskScore": number 0-100,',
@@ -188,10 +192,22 @@ function smoothRiskScore(params: {
     return previousScore
   }
 
+  if (Math.abs(delta) <= 3) {
+    return previousScore
+  }
+
   const confidence = clamp(params.confidence, 0, 1)
-  const baseMaxStep = confidence >= 0.75 ? 18 : confidence >= 0.55 ? 14 : 10
+  const baseMaxStep = confidence >= 0.8 ? 11 : confidence >= 0.65 ? 8 : 6
+  const crossingMediumBand =
+    (previousScore < 40 && targetScore >= 40) || (previousScore >= 40 && targetScore < 40)
   const crossingHighRisk = previousScore < 70 && targetScore >= 70
-  const maxStep = crossingHighRisk ? Math.max(baseMaxStep, 22) : baseMaxStep
+  const upwardStep = crossingHighRisk
+    ? Math.max(baseMaxStep, 12)
+    : crossingMediumBand
+      ? Math.max(baseMaxStep, 10)
+      : baseMaxStep
+  const downwardStep = Math.max(4, upwardStep - 2)
+  const maxStep = delta > 0 ? upwardStep : downwardStep
 
   if (Math.abs(delta) <= maxStep) {
     return targetScore
@@ -337,13 +353,17 @@ export async function generateModelAdvice(params: {
   }
 
   const transcriptBlock = formatTranscriptForModel(recentTranscript)
+  const latestDeltaBlock = formatTranscriptForModel(recentTranscript.slice(-8))
   const previousAdviceBlock = previousAdvice
     ? JSON.stringify({
         riskScore: previousAdvice.riskScore,
         riskLevel: previousAdvice.riskLevel,
+        feedback: previousAdvice.feedback,
+        whatToSay: previousAdvice.whatToSay,
         whatToDo: previousAdvice.whatToDo,
         nextSteps: previousAdvice.nextSteps,
         confidence: previousAdvice.confidence,
+        updatedAt: previousAdvice.updatedAt,
       })
     : 'none'
 
@@ -369,6 +389,9 @@ export async function generateModelAdvice(params: {
             content: [
               'Previous advice snapshot (for continuity):',
               previousAdviceBlock,
+              '',
+              'Latest transcript delta (prioritize this for changes):',
+              latestDeltaBlock || 'none',
               '',
               'Conversation transcript (latest chunk at bottom):',
               transcriptBlock,

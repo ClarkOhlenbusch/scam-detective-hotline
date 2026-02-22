@@ -841,14 +841,14 @@ export function CasePanel({
               {transcript.map((line) => (
                 <div
                   key={line.id}
-                  className={`mx-auto w-full max-w-[95%] rounded-2xl border px-4 py-3 ${
+                  className={`mx-auto w-fit max-w-[95%] rounded-2xl border px-4 py-3 transition-[width,height] duration-150 ${
                     line.isFinal
                       ? 'border-border/70 bg-secondary/80'
                       : 'border-primary/30 bg-primary/5'
                   }`}
                 >
                   <p
-                    className={`text-center font-mono text-[15px] leading-relaxed ${
+                    className={`font-mono text-[15px] leading-relaxed whitespace-pre-wrap break-words ${
                       line.isFinal ? 'text-foreground' : 'italic text-foreground/90'
                     }`}
                   >
