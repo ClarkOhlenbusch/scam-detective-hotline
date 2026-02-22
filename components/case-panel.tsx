@@ -50,7 +50,7 @@ type LiveSessionPayload = {
 
 const STORAGE_KEY_PREFIX = 'live-call:'
 const MAX_TRANSCRIPT_LINES = 40
-const FALLBACK_POLL_INTERVAL_MS = 6_000
+const FALLBACK_POLL_INTERVAL_MS = 2_500
 const RECONNECT_NOTE = 'Live updates paused. Reconnecting...'
 
 function createDefaultAdvice(): LiveAdvice {
@@ -237,7 +237,6 @@ export function CasePanel({
 
     let cancelled = false
     let inFlight = false
-    let realtimeSubscribed = false
 
     function applySessionPayload(data: LiveSessionPayload) {
       if (typeof data.status === 'string') {
@@ -373,7 +372,6 @@ export function CasePanel({
           const row = asRecord(payload.new)
           if (!row) return
 
-          realtimeSubscribed = true
           applyLiveCallRow(row)
         },
       )
@@ -389,33 +387,24 @@ export function CasePanel({
           const row = asRecord(payload.new)
           if (!row) return
 
-          realtimeSubscribed = true
           applyTranscriptRow(row)
         },
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          realtimeSubscribed = true
           setCaseNote((previous) => (previous === RECONNECT_NOTE ? '' : previous))
           return
-        }
-
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          realtimeSubscribed = false
         }
       })
 
     void pollLiveSession()
 
     const fallbackTimer = window.setInterval(() => {
-      if (!realtimeSubscribed) {
-        void pollLiveSession()
-      }
+      void pollLiveSession()
     }, FALLBACK_POLL_INTERVAL_MS)
 
     return () => {
       cancelled = true
-      realtimeSubscribed = false
       window.clearInterval(fallbackTimer)
       void supabase.removeChannel(channel)
     }
