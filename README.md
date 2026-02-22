@@ -19,7 +19,7 @@
 ---
 
 <p>
-  <img src="public/marlowe_movie_1969.jpg" alt="Marlowe (1969) poster inspiration" width="120" />
+  <img src="public/marlow_phone_1.png" alt="Marlowe (1969) phone" width="120" />
 </p>
 
 ---
@@ -114,8 +114,6 @@ User enters phone number → Marlowe calls them back via Twilio
 | Coaching Engine | Local heuristic risk analysis + Groq Chat Completions (llama-3.3-70b-versatile) |
 | Realtime Data | Supabase Postgres + Supabase Realtime + `@supabase/ssr` |
 | Deployment | Vercel + Vercel Analytics |
-
-Built in a weekend with a hybrid workflow:
 
 - **Vercel v0** — framework + initial skeleton
 - **Handwritten code** — core telephony pipeline, webhook handling, coaching engine
