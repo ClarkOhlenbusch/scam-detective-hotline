@@ -19,7 +19,7 @@
 ---
 
 <p>
-  <img src="public/marlow_phone_1.png" alt="Marlowe (1969) phone" width="120" />
+  <img src="public/marlowe_phone_1.png" alt="Marlowe (1969) phone" width="120" />
 </p>
 
 ---
