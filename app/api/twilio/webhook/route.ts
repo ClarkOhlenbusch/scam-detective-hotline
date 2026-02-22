@@ -19,7 +19,7 @@ import { getTwilioConfig } from '@/lib/twilio-api'
 import {
   buildTwilioUrlCandidates,
   isValidTwilioSignature,
-  parseTwilioFormBody,
+  parseTwilioWebhookBody,
   parseTwilioWebhookEvent,
   shouldSkipTwilioWebhookValidation,
 } from '@/lib/twilio-webhook'
@@ -270,7 +270,8 @@ export async function POST(request: NextRequest) {
   }
 
   const rawBody = await request.text()
-  const bodyParams = parseTwilioFormBody(rawBody)
+  const parsedBody = parseTwilioWebhookBody(rawBody, request.headers.get('content-type'))
+  const bodyParams = parsedBody.bodyParams
 
   if (!skipValidation) {
     if (!twilioConfig) {
@@ -295,6 +296,8 @@ export async function POST(request: NextRequest) {
       signature,
       urlCandidates,
       bodyParams,
+      rawBody: parsedBody.isJson ? rawBody : undefined,
+      isJsonBody: parsedBody.isJson,
     })
 
     if (!validSignature) {

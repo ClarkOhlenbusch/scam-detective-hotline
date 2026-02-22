@@ -3,6 +3,11 @@ import { TranscriptSpeaker } from '@/lib/live-types'
 
 export type TwilioWebhookParams = Record<string, string>
 
+export type ParsedTwilioWebhookBody = {
+  bodyParams: TwilioWebhookParams
+  isJson: boolean
+}
+
 export type ParsedTwilioWebhookEvent = {
   callSid: string | null
   accountSid: string | null
@@ -53,6 +58,150 @@ function readBoolean(value: string | null): boolean | null {
   if (['1', 'true', 'yes', 'y'].includes(normalized)) return true
   if (['0', 'false', 'no', 'n'].includes(normalized)) return false
   return null
+}
+
+function readUnknownAsString(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed || null
+  }
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value)
+  }
+
+  if (typeof value === 'boolean') {
+    return value ? 'true' : 'false'
+  }
+
+  return null
+}
+
+function normalizeLookupKey(value: string): string {
+  return value.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+}
+
+function collectJsonRecords(value: unknown, depth = 0, seen = new Set<unknown>()): JsonRecord[] {
+  if (depth > 4 || !value || typeof value !== 'object') {
+    return []
+  }
+
+  if (seen.has(value)) {
+    return []
+  }
+  seen.add(value)
+
+  const out: JsonRecord[] = []
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      out.push(...collectJsonRecords(item, depth + 1, seen))
+    }
+    return out
+  }
+
+  const record = asRecord(value)
+  if (!record) return out
+  out.push(record)
+
+  for (const nested of Object.values(record)) {
+    if (nested && typeof nested === 'object') {
+      out.push(...collectJsonRecords(nested, depth + 1, seen))
+    }
+  }
+
+  return out
+}
+
+function readValueFromRecord(record: JsonRecord | null, ...keys: string[]): unknown {
+  if (!record) return null
+
+  const lookup = new Set(keys.map((key) => normalizeLookupKey(key)))
+
+  for (const [recordKey, value] of Object.entries(record)) {
+    if (lookup.has(normalizeLookupKey(recordKey))) {
+      return value
+    }
+  }
+
+  return null
+}
+
+function readValueFromRecords(records: JsonRecord[], ...keys: string[]): unknown {
+  for (const record of records) {
+    const value = readValueFromRecord(record, ...keys)
+    if (value !== null && value !== undefined) {
+      return value
+    }
+  }
+
+  return null
+}
+
+function parseTwilioJsonBody(rawBody: string): TwilioWebhookParams {
+  try {
+    const parsed = JSON.parse(rawBody)
+    const records = collectJsonRecords(parsed)
+    if (records.length === 0) {
+      return {}
+    }
+
+    const bodyParams: TwilioWebhookParams = {}
+    const assignString = (key: string, value: unknown) => {
+      const parsedValue = readUnknownAsString(value)
+      if (parsedValue) {
+        bodyParams[key] = parsedValue
+      }
+    }
+
+    assignString('CallSid', readValueFromRecords(records, 'CallSid', 'callSid', 'call_sid'))
+    assignString('AccountSid', readValueFromRecords(records, 'AccountSid', 'accountSid', 'account_sid'))
+    assignString('CallStatus', readValueFromRecords(records, 'CallStatus', 'callStatus', 'call_status', 'status'))
+    assignString('Slug', readValueFromRecords(records, 'Slug', 'slug'))
+    assignString(
+      'TranscriptionEvent',
+      readValueFromRecords(records, 'TranscriptionEvent', 'transcriptionEvent', 'transcription_event', 'eventType'),
+    )
+    assignString('TranscriptionSid', readValueFromRecords(records, 'TranscriptionSid', 'transcriptionSid', 'transcription_sid'))
+    assignString('TranscriptionSessionSid', readValueFromRecords(records, 'TranscriptionSessionSid', 'transcriptionSessionSid', 'transcription_session_sid'))
+    assignString('TranscriptionSegmentSid', readValueFromRecords(records, 'TranscriptionSegmentSid', 'transcriptionSegmentSid', 'transcription_segment_sid'))
+    assignString('SegmentSid', readValueFromRecords(records, 'SegmentSid', 'segmentSid', 'segment_sid'))
+    assignString('SequenceId', readValueFromRecords(records, 'SequenceId', 'sequenceId', 'sequence_id', 'resultIndex', 'result_index'))
+    assignString('Track', readValueFromRecords(records, 'Track', 'track', 'Channel', 'channel', 'speaker', 'role', 'participantRole', 'participant_role'))
+    assignString('IsFinal', readValueFromRecords(records, 'IsFinal', 'isFinal', 'is_final', 'final'))
+    assignString('Timestamp', readValueFromRecords(records, 'Timestamp', 'timestamp', 'Time', 'time', 'DateCreated', 'dateCreated', 'date_created'))
+    assignString(
+      'TranscriptionText',
+      readValueFromRecords(
+        records,
+        'TranscriptionText',
+        'transcriptionText',
+        'transcription_text',
+        'Transcript',
+        'transcript',
+        'text',
+        'SpeechResult',
+        'speechResult',
+        'UnstableSpeechResult',
+        'unstableSpeechResult',
+      ),
+    )
+
+    const transcriptionDataRaw = readValueFromRecords(records, 'TranscriptionData', 'transcriptionData', 'transcription_data')
+
+    if (typeof transcriptionDataRaw === 'string') {
+      const trimmed = transcriptionDataRaw.trim()
+      if (trimmed) {
+        bodyParams.TranscriptionData = trimmed
+      }
+    } else if (transcriptionDataRaw && typeof transcriptionDataRaw === 'object') {
+      bodyParams.TranscriptionData = JSON.stringify(transcriptionDataRaw)
+    }
+
+    return bodyParams
+  } catch {
+    return {}
+  }
 }
 
 function parseTimestamp(value: string | null): number {
@@ -199,6 +348,25 @@ export function parseTwilioFormBody(rawBody: string): TwilioWebhookParams {
   return parsed
 }
 
+export function parseTwilioWebhookBody(rawBody: string, contentType: string | null): ParsedTwilioWebhookBody {
+  const normalizedType = contentType?.split(';')[0]?.trim().toLowerCase() ?? ''
+  const trimmedBody = rawBody.trim()
+  const looksLikeJson = trimmedBody.startsWith('{') || trimmedBody.startsWith('[')
+  const isJson = normalizedType === 'application/json' || normalizedType.endsWith('+json') || looksLikeJson
+
+  if (!isJson) {
+    return {
+      bodyParams: parseTwilioFormBody(rawBody),
+      isJson: false,
+    }
+  }
+
+  return {
+    bodyParams: parseTwilioJsonBody(rawBody),
+    isJson: true,
+  }
+}
+
 function computeTwilioSignature(
   authToken: string,
   url: string,
@@ -208,6 +376,38 @@ function computeTwilioSignature(
   const payload = sortedKeys.reduce((acc, key) => `${acc}${key}${params[key]}`, url)
 
   return createHmac('sha1', authToken).update(payload).digest('base64')
+}
+
+function computeSha256Hex(value: string): string {
+  return createHash('sha256').update(value).digest('hex')
+}
+
+function getBodyShaFromUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url)
+    const bodySha = parsed.searchParams.get('bodySHA256')?.trim()
+    return bodySha || null
+  } catch {
+    return null
+  }
+}
+
+function isValidJsonSignatureCandidate(params: {
+  authToken: string
+  signature: string
+  url: string
+  rawBody: string
+}): boolean {
+  const bodySha = getBodyShaFromUrl(params.url)
+
+  if (bodySha) {
+    const computedSha = computeSha256Hex(params.rawBody)
+    if (!safeEqual(computedSha.toLowerCase(), bodySha.toLowerCase())) {
+      return false
+    }
+  }
+
+  return safeEqual(computeTwilioSignature(params.authToken, params.url, {}), params.signature)
 }
 
 function safeEqual(a: string, b: string): boolean {
@@ -257,10 +457,25 @@ export function isValidTwilioSignature(params: {
   signature: string
   urlCandidates: string[]
   bodyParams: TwilioWebhookParams
+  rawBody?: string
+  isJsonBody?: boolean
 }): boolean {
-  return params.urlCandidates.some((candidate) =>
-    safeEqual(computeTwilioSignature(params.authToken, candidate, params.bodyParams), params.signature),
-  )
+  const rawBody = typeof params.rawBody === 'string' ? params.rawBody : null
+
+  if (params.isJsonBody && rawBody !== null) {
+    return params.urlCandidates.some((candidate) =>
+      isValidJsonSignatureCandidate({
+        authToken: params.authToken,
+        signature: params.signature,
+        url: candidate,
+        rawBody,
+      }),
+    )
+  }
+
+  return params.urlCandidates.some((candidate) => {
+    return safeEqual(computeTwilioSignature(params.authToken, candidate, params.bodyParams), params.signature)
+  })
 }
 
 export function parseTwilioWebhookEvent(

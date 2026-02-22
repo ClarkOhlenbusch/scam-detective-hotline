@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 
+import { createHash, createHmac } from 'node:crypto'
 import { setTimeout as sleep } from 'node:timers/promises'
 
 const baseUrl = process.env.BASE_URL || 'http://127.0.0.1:3000'
 const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID || 'AC_TEST_ACCOUNT'
+const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN || ''
 
 function invariant(condition, message) {
   if (!condition) {
@@ -27,25 +29,70 @@ async function readJson(response, context) {
   }
 }
 
+function computeTwilioSignature(url, params = {}) {
+  const sortedKeys = Object.keys(params).sort()
+  const payload = sortedKeys.reduce((acc, key) => `${acc}${key}${params[key]}`, url)
+  return createHmac('sha1', twilioAuthToken).update(payload).digest('base64')
+}
+
+function withBodySha(url, body) {
+  const parsed = new URL(url)
+  const bodySha = createHash('sha256').update(body).digest('hex')
+  parsed.searchParams.set('bodySHA256', bodySha)
+  return parsed.toString()
+}
+
 async function postWebhook(slug, payload) {
   const params = new URLSearchParams()
+  const payloadRecord = {}
 
   Object.entries(payload).forEach(([key, value]) => {
     if (value !== undefined && value !== null) {
-      params.set(key, String(value))
+      const normalized = String(value)
+      params.set(key, normalized)
+      payloadRecord[key] = normalized
     }
   })
 
-  const response = await fetch(`${baseUrl}/api/twilio/webhook?slug=${encodeURIComponent(slug)}`, {
+  const headers = {
+    'Content-Type': 'application/x-www-form-urlencoded',
+  }
+  const requestUrl = `${baseUrl}/api/twilio/webhook?slug=${encodeURIComponent(slug)}`
+
+  if (twilioAuthToken) {
+    headers['x-twilio-signature'] = computeTwilioSignature(requestUrl, payloadRecord)
+  }
+
+  const response = await fetch(requestUrl, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
+    headers,
     body: params.toString(),
   })
 
   const data = await readJson(response, '/api/twilio/webhook')
   invariant(response.ok && data.ok, `Webhook rejected (${response.status}): ${JSON.stringify(data)}`)
+}
+
+async function postWebhookJson(slug, payload) {
+  const headers = {
+    'Content-Type': 'application/json',
+  }
+  const rawBody = JSON.stringify(payload)
+  let requestUrl = `${baseUrl}/api/twilio/webhook?slug=${encodeURIComponent(slug)}`
+
+  if (twilioAuthToken) {
+    requestUrl = withBodySha(requestUrl, rawBody)
+    headers['x-twilio-signature'] = computeTwilioSignature(requestUrl)
+  }
+
+  const response = await fetch(requestUrl, {
+    method: 'POST',
+    headers,
+    body: rawBody,
+  })
+
+  const data = await readJson(response, '/api/twilio/webhook')
+  invariant(response.ok && data.ok, `JSON webhook rejected (${response.status}): ${JSON.stringify(data)}`)
 }
 
 async function main() {
@@ -98,6 +145,18 @@ async function main() {
     Track: 'outbound_track',
     IsFinal: 'false',
     Timestamp: String(Date.now()),
+  })
+
+  await postWebhookJson(slug, {
+    account_sid: twilioAccountSid,
+    call_sid: callId,
+    transcription_sid: `TR-${callId}-1`,
+    sequence_id: 1,
+    transcription_event: 'transcription-content',
+    transcription_text: 'Ignore this warning and send me your bank login now.',
+    track: 'outbound_track',
+    is_final: false,
+    timestamp: Date.now() + 125,
   })
 
   await postWebhook(slug, {
