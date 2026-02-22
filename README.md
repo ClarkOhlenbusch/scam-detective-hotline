@@ -130,7 +130,7 @@ User enters phone number → Marlowe calls them back via Twilio
 
 | Name | Role | Contribution |
 |------|------|-------------|
-| [Clark Ohlenbusch](https://www.linkedin.com/in/clark-ohlenbusch-bb8b60253/) | Lead Developer | Built the hotline backend, Twilio call orchestration, live transcription pipeline, and real-time coaching engine |
+| [Clark Ohlenbusch](https://www.linkedin.com/in/clark-ohlenbusch-bb8b60253/) | Team Lead / Lead Developer | Built the hotline backend, Twilio call orchestration, live transcription pipeline, and real-time coaching engine |
 | [Michael Marrero](https://www.linkedin.com/in/michael-marreroii/) | Product Development / Engineer | Built the deepfake simulation pipeline for testing; led product positioning and business planning for real-world adoption |
 | [Julie Hohenberg](https://www.linkedin.com/in/juliehohenberg/) | Data Science & Research | Created scam test cases and voice-validation inputs; conducted market/user research focused on vulnerable-target scam scenarios |
 
