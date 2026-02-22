@@ -2,6 +2,22 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getLiveSessionSnapshot } from '@/lib/live-store'
 
 export const runtime = 'nodejs'
+const DEFAULT_TRANSCRIPT_LIMIT = 25
+const TRANSCRIPT_LIMIT = getTranscriptLimit()
+
+function getTranscriptLimit(): number {
+  const raw = process.env.LIVE_TRANSCRIPT_LIMIT?.trim()
+  if (!raw) {
+    return DEFAULT_TRANSCRIPT_LIMIT
+  }
+
+  const parsed = Number.parseInt(raw, 10)
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return DEFAULT_TRANSCRIPT_LIMIT
+  }
+
+  return Math.min(parsed, 100)
+}
 
 export async function GET(request: NextRequest) {
   const callId = request.nextUrl.searchParams.get('callId')
@@ -15,7 +31,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const session = await getLiveSessionSnapshot(callId, slug, 8)
+    const session = await getLiveSessionSnapshot(callId, slug, TRANSCRIPT_LIMIT)
 
     if (!session) {
       return NextResponse.json(

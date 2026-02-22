@@ -318,22 +318,25 @@ function buildSourceEventId(params: {
   sourceHint: string | null
   timestamp: number
   speaker: TranscriptSpeaker
-  text: string
 }): string {
-  const primaryId =
-    params.segmentSid ||
-    params.sourceHint ||
-    [params.transcriptionSid, params.sequenceId].filter(Boolean).join(':') ||
-    `${params.timestamp}:${params.speaker}`
+  const sequenceKey =
+    params.transcriptionSid && params.sequenceId
+      ? `${params.transcriptionSid}:${params.sequenceId}:${params.speaker}`
+      : null
+
+  const stablePrimaryId = params.segmentSid || params.sourceHint || sequenceKey
+
+  if (stablePrimaryId) {
+    return createHash('sha1')
+      .update([params.callSid, stablePrimaryId].join('|'))
+      .digest('hex')
+  }
+
+  const timestampBucket = Math.floor(params.timestamp / 1_500)
+  const fallbackPrimaryId = `${timestampBucket}:${params.speaker}`
 
   return createHash('sha1')
-    .update(
-      [
-        params.callSid,
-        primaryId,
-        params.text.trim().toLowerCase(),
-      ].join('|'),
-    )
+    .update([params.callSid, fallbackPrimaryId].join('|'))
     .digest('hex')
 }
 
@@ -536,7 +539,6 @@ export function parseTwilioWebhookEvent(
     sourceHint: transcriptionData.sourceHint,
     timestamp,
     speaker,
-    text: transcriptText,
   })
 
   return {

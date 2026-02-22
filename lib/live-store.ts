@@ -263,6 +263,7 @@ export async function getTranscriptChunks(callSid: string, limit: number): Promi
       speaker: toSpeaker(row.speaker),
       text: row.text,
       timestamp: parseTimestampMs(row.timestamp_ms),
+      isFinal: Boolean(row.is_final),
     }))
 }
 
@@ -298,7 +299,7 @@ export async function getLiveCallSummary(callSid: string): Promise<{
 export async function getLiveSessionSnapshot(
   callSid: string,
   slug: string,
-  transcriptLimit = 8,
+  transcriptLimit = 25,
 ): Promise<LiveSessionSnapshot | null> {
   const supabase = createAdminClient()
   const { data, error } = await supabase

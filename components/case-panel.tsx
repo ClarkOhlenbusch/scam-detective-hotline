@@ -23,6 +23,7 @@ type TranscriptLine = {
   speaker: 'caller' | 'other' | 'assistant' | 'unknown'
   text: string
   timestamp: number
+  isFinal: boolean
 }
 
 type LiveAdvice = {
@@ -50,8 +51,26 @@ type LiveSessionPayload = {
 
 const STORAGE_KEY_PREFIX = 'live-call:'
 const MAX_TRANSCRIPT_LINES = 40
-const FALLBACK_POLL_INTERVAL_MS = 2_500
+const DEFAULT_VISIBLE_POLL_INTERVAL_MS = 800
+const DEFAULT_HIDDEN_POLL_INTERVAL_MS = 2_500
 const RECONNECT_NOTE = 'Live updates paused. Reconnecting...'
+const POLL_INTERVAL_VISIBLE_MS =
+  readPositiveInt(process.env.NEXT_PUBLIC_LIVE_POLL_VISIBLE_MS) ?? DEFAULT_VISIBLE_POLL_INTERVAL_MS
+const POLL_INTERVAL_HIDDEN_MS =
+  readPositiveInt(process.env.NEXT_PUBLIC_LIVE_POLL_HIDDEN_MS) ?? DEFAULT_HIDDEN_POLL_INTERVAL_MS
+
+function readPositiveInt(value: string | undefined): number | null {
+  if (!value?.trim()) {
+    return null
+  }
+
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null
+  }
+
+  return parsed
+}
 
 function createDefaultAdvice(): LiveAdvice {
   return {
@@ -261,7 +280,12 @@ export function CasePanel({
       }
 
       if (Array.isArray(data.transcript)) {
-        setTranscript(data.transcript.slice(-MAX_TRANSCRIPT_LINES))
+        setTranscript(
+          data.transcript.slice(-MAX_TRANSCRIPT_LINES).map((line) => ({
+            ...line,
+            isFinal: line.isFinal !== false,
+          })),
+        )
       }
 
       if (data.lastError) {
@@ -318,6 +342,7 @@ export function CasePanel({
         speaker: toSpeaker(row.speaker),
         text: text.trim(),
         timestamp: parseTimestampMs(row.timestamp_ms),
+        isFinal: typeof row.is_final === 'boolean' ? row.is_final : true,
       }
 
       setTranscript((previous) => mergeTranscriptLine(previous, line))
@@ -357,6 +382,33 @@ export function CasePanel({
         inFlight = false
       }
     }
+
+    function getPollIntervalMs(): number {
+      if (document.visibilityState === 'hidden') {
+        return POLL_INTERVAL_HIDDEN_MS
+      }
+      return POLL_INTERVAL_VISIBLE_MS
+    }
+
+    let fallbackTimer = window.setInterval(() => {
+      void pollLiveSession()
+    }, getPollIntervalMs())
+
+    function restartFallbackTimer() {
+      window.clearInterval(fallbackTimer)
+      fallbackTimer = window.setInterval(() => {
+        void pollLiveSession()
+      }, getPollIntervalMs())
+    }
+
+    function handleVisibilityChange() {
+      restartFallbackTimer()
+      if (document.visibilityState === 'visible') {
+        void pollLiveSession()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     const channel = supabase
       .channel(`live:${slug}:${activeCallId}:${Date.now()}`)
@@ -399,13 +451,10 @@ export function CasePanel({
 
     void pollLiveSession()
 
-    const fallbackTimer = window.setInterval(() => {
-      void pollLiveSession()
-    }, FALLBACK_POLL_INTERVAL_MS)
-
     return () => {
       cancelled = true
       window.clearInterval(fallbackTimer)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
       void supabase.removeChannel(channel)
     }
   }, [callId, slug, storageKey, supabase])
@@ -633,9 +682,19 @@ export function CasePanel({
               {transcript.map((line) => (
                 <div
                   key={line.id}
-                  className="mx-auto w-full max-w-[95%] rounded-2xl border border-border/70 bg-secondary/80 px-4 py-3"
+                  className={`mx-auto w-full max-w-[95%] rounded-2xl border px-4 py-3 ${
+                    line.isFinal
+                      ? 'border-border/70 bg-secondary/80'
+                      : 'border-primary/30 bg-primary/5'
+                  }`}
                 >
-                  <p className="text-center font-mono text-[15px] leading-relaxed text-foreground">{line.text}</p>
+                  <p
+                    className={`text-center font-mono text-[15px] leading-relaxed ${
+                      line.isFinal ? 'text-foreground' : 'italic text-foreground/90'
+                    }`}
+                  >
+                    {line.text}
+                  </p>
                 </div>
               ))}
             </div>

@@ -15,6 +15,7 @@ export type TranscriptChunk = {
   speaker: TranscriptSpeaker
   text: string
   timestamp: number
+  isFinal: boolean
 }
 
 export type CoachingAdvice = {

@@ -31,7 +31,7 @@ function buildTwiml(request: NextRequest): string {
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<Response>',
-    `  <Start><Transcription statusCallbackUrl="${escapeXml(webhookUrl.toString())}" track="both_tracks" /></Start>`,
+    `  <Start><Transcription statusCallbackUrl="${escapeXml(webhookUrl.toString())}" track="both_tracks" partialResults="true" /></Start>`,
     '  <Pause length="60"/>',
     `  <Redirect method="POST">${escapeXml(redirectUrl.toString())}</Redirect>`,
     '</Response>',

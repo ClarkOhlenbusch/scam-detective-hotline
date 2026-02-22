@@ -33,17 +33,22 @@ const RATE_LIMIT_BASE_BACKOFF_MS = 6_000
 const RATE_LIMIT_MAX_BACKOFF_MS = 60_000
 const RATE_LIMIT_STREAK_RESET_MS = 90_000
 const ADVICE_TRANSCRIPT_LIMIT = 40
+const DEFAULT_NON_FINAL_ADVICE_MIN_INTERVAL_MS = 1_200
 const ADVICE_DELAYED_MESSAGE =
   'Live analysis is delayed. Keep verifying through official channels.'
 const ADVICE_RATE_LIMITED_MESSAGE =
   'Live analysis is temporarily rate-limited. Using local scoring for now.'
 const HAS_GROQ_MODEL = Boolean(process.env.GROQ_API_KEY?.trim())
 const MODEL_MIN_INTERVAL_MS = getModelMinIntervalMs()
+const NON_FINAL_ADVICE_MIN_INTERVAL_MS =
+  parsePositiveInt(process.env.ADVICE_NON_FINAL_MIN_INTERVAL_MS) ??
+  DEFAULT_NON_FINAL_ADVICE_MIN_INTERVAL_MS
 
 type AdviceRunState = {
   running: boolean
   pending: boolean
   forceModel: boolean
+  lastAdviceTriggerAt: number
   lastModelRunAt: number
   modelCooldownUntil: number
   rateLimitStreak: number
@@ -97,6 +102,7 @@ function runAdviceForCall(callSid: string, force = false) {
     running: false,
     pending: false,
     forceModel: false,
+    lastAdviceTriggerAt: 0,
     lastModelRunAt: 0,
     modelCooldownUntil: 0,
     rateLimitStreak: 0,
@@ -105,6 +111,13 @@ function runAdviceForCall(callSid: string, force = false) {
   }
   store.set(callSid, current)
 
+  const now = Date.now()
+  const lastAdviceTriggerAt = current.lastAdviceTriggerAt ?? 0
+  if (!force && now - lastAdviceTriggerAt < NON_FINAL_ADVICE_MIN_INTERVAL_MS) {
+    return
+  }
+
+  current.lastAdviceTriggerAt = now
   current.pending = true
   current.forceModel = current.forceModel || force
 
