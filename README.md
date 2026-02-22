@@ -18,38 +18,43 @@ This project was built with a hybrid workflow:
 - Extended and refined with **handwritten code**
 - AI-assisted iteration using **Codex**, **Claude Code**, **Gemini CLI**, and **Kiro CLI**
 - Deployed on **Vercel**
-- **Supabase** used for backend services/infrastructure
-- **Twilio** used for outbound monitor calls and live call transcription callbacks
-- **Groq** used for real-time coaching analysis on transcript chunks
+- **Supabase** powers tenant records, live call state, transcript persistence, and Realtime subscriptions
+- **Twilio** powers outbound monitor calls plus live transcription/status callbacks
+- **Groq** is used as an optional model layer on top of local heuristic scam scoring
 
 ## Tech Stack
 - **Framework:** Next.js 16 (App Router), React 19, TypeScript
 - **UI:** Tailwind CSS v4, Radix UI primitives, shadcn-style component architecture
-- **Backend/API:** Next.js Route Handlers (`app/api/call/route.ts`)
-- **Voice/Calling:** Twilio (call initiation + live transcription webhooks)
-- **LLM Coaching:** Groq Chat Completions API
-- **Infra:** Vercel deployment + Supabase backend services
+- **Backend/API:** Next.js Route Handlers (`app/api/call/*`, `app/api/twilio/*`, `app/api/tenant/phone`)
+- **Voice/Calling:** Twilio Programmable Voice (outbound calls + transcription webhooks)
+- **Coaching Engine:** Local heuristic risk analysis with optional Groq Chat Completions enrichment
+- **Data/Realtime:** Supabase Postgres + Supabase Realtime + `@supabase/ssr`
+- **Infra:** Vercel deployment + Vercel Analytics
 
 ## Features
-- Guided setup flow to capture and normalize user phone numbers
-- Silent monitor call flow with live transcript ingestion
-- Real-time scam risk scoring and concise coaching prompts
-- Server-side call initiation with safe error handling
+- Tenant-scoped case flow (`/start` provisions or resumes a tenant slug, then routes to `/t/{slug}`)
+- Guided setup flow to capture and normalize a protected phone number
+- Server-side outbound call initiation with rate limiting and cooldown protection
+- Twilio signature-validated webhook ingestion (handles form-encoded and JSON payloads)
+- Live transcript + coaching updates via Supabase Realtime with polling fallback
+- Real-time scam risk scoring and action-first coaching with model-rate-limit backoff handling
 
 ## Getting Started
 ### Prerequisites
 - Node.js 20+
 - `pnpm`
+- A Supabase project
+- A Twilio number with voice enabled
 
 ### Install and run
 ```bash
 pnpm install
 pnpm dev
 ```
-Open `http://localhost:3000`.
+Open `http://localhost:3000` (the app redirects `/` to `/start`).
 
-### Database migration
-Run SQL migrations in your Supabase/Postgres database:
+### Database setup
+Run SQL migrations in your Supabase/Postgres database (in order):
 
 ```bash
 psql "$POSTGRES_URL_NON_POOLING" -f scripts/001_create_tenants.sql
@@ -57,7 +62,13 @@ psql "$POSTGRES_URL_NON_POOLING" -f scripts/003_live_call_tables.sql
 psql "$POSTGRES_URL_NON_POOLING" -f scripts/004_enable_realtime_live_tables.sql
 ```
 
-`scripts/004_enable_realtime_live_tables.sql` enables Supabase Realtime publication and demo-friendly read policies for live call streaming tables.
+Optional demo seed:
+
+```bash
+psql "$POSTGRES_URL_NON_POOLING" -f scripts/002_seed_demo_tenant.sql
+```
+
+`scripts/004_enable_realtime_live_tables.sql` enables Supabase Realtime publication plus demo read policies for `live_calls` and `live_transcript_chunks`.
 
 ### Production build
 ```bash
@@ -74,38 +85,58 @@ pnpm lint
 ```bash
 pnpm test:mock
 ```
+`pnpm test:mock` expects the app running locally and exercises `/start`, `/api/tenant/phone`, `/api/twilio/webhook`, and `/api/call/live`.
 
 ## Environment Variables
-Create `.env.local` with at least:
+Create `.env.local` with:
+
+Required:
 
 ```bash
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
 TWILIO_ACCOUNT_SID=...
 TWILIO_AUTH_TOKEN=...
 TWILIO_PHONE_NUMBER=...
-GROQ_API_KEY=...
 ```
 
-Optional hardening:
+Optional:
 
 ```bash
-GROQ_MODEL=llama-3.3-70b-versatile
-TWILIO_WEBHOOK_SKIP_SIGNATURE_VALIDATION=0
+GROQ_API_KEY=...
+GROQ_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
+GROQ_RPM_LIMIT=30
+GROQ_MIN_INTERVAL_MS=2800
+TWILIO_WEBHOOK_SKIP_SIGNATURE_VALIDATION=1
+PUBLIC_BASE_URL=https://your-domain.com
+# or APP_BASE_URL / NEXT_PUBLIC_APP_URL
+TENANT_ADMIN_OVERRIDE_TOKEN=...
+BASE_URL=http://127.0.0.1:3000
 ```
 
-Supabase-related variables may also be required for backend features (for example `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and service credentials) depending on your environment.
+Notes:
+- `GROQ_API_KEY` is optional. Without it, the app uses local heuristic advice only.
+- Keep Twilio signature validation enabled in production (`TWILIO_WEBHOOK_SKIP_SIGNATURE_VALIDATION` unset or `0`).
+- If `PUBLIC_BASE_URL`/`APP_BASE_URL`/`NEXT_PUBLIC_APP_URL` are unset, webhook URLs fall back to forwarded host headers (or Vercel production host).
 
 ## Project Structure
 ```text
-app/                 # pages, layout, route handlers
-app/api/call/        # call initiation endpoint
-components/          # app and UI components
-hooks/               # reusable React hooks
-lib/                 # utilities (phone parsing/validation)
-public/              # static assets
+app/                          # routes, layouts, API handlers
+app/start/route.ts            # provisions/reuses tenant slug and redirects to /t/{slug}
+app/t/[slug]/                 # tenant case page + setup page
+app/api/call/                 # call start + live session snapshot
+app/api/twilio/               # TwiML + Twilio webhook ingest/validation
+app/api/tenant/phone/         # protected number setup endpoint
+components/                   # app and UI components
+lib/live-*.ts                 # live status, transcript, and coaching logic
+lib/supabase/                 # server/admin/browser Supabase clients
+lib/twilio-*.ts               # Twilio API + webhook parsing/verification
+scripts/                      # SQL migrations + mock live-flow test
 ```
 
 ## Deployment
-This project is configured for Vercel deployment. Push to your Git provider and import the repo in Vercel, then add required environment variables in project settings.
+This project is configured for Vercel deployment. Import the repo into Vercel, set the environment variables above, run the SQL migrations in Supabase, and verify Twilio can reach your deployed `/api/twilio/webhook` endpoint.
 
 ## Reflection
 Our main challenge was designing something people could realistically use during a high-stress scam call, so we focused on a simple, fast user flow. We also attended Lucas Maley’s PM workshop, which helped us think more clearly about product design and feature prioritization.
