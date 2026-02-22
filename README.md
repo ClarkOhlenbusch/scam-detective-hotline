@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <sub>Built for the <strong>Security Track</strong> at the Tufts Hackathon.</sub>
+  <sub>Built for the <strong>Security Track</strong> at the [2026 Jumbo Hackathon](https://jumbohack.org/).</sub>
 </p>
 
 <p align="center">
