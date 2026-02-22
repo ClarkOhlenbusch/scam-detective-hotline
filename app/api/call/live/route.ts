@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getLiveSessionSnapshot } from '@/lib/live-store'
 
 export const runtime = 'nodejs'
-const DEFAULT_TRANSCRIPT_LIMIT = 25
+const DEFAULT_TRANSCRIPT_LIMIT = 200
 const TRANSCRIPT_LIMIT = getTranscriptLimit()
 
 function getTranscriptLimit(): number {
@@ -16,7 +16,7 @@ function getTranscriptLimit(): number {
     return DEFAULT_TRANSCRIPT_LIMIT
   }
 
-  return Math.min(parsed, 100)
+  return Math.min(parsed, 500)
 }
 
 export async function GET(request: NextRequest) {

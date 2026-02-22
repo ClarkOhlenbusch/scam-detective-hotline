@@ -50,8 +50,11 @@ type LiveSessionPayload = {
 }
 
 const STORAGE_KEY_PREFIX = 'live-call:'
-const MAX_TRANSCRIPT_LINES = 40
+const MAX_TRANSCRIPT_LINES = 220
 const UTTERANCE_GAP_MS = 1_400
+const MAX_SENTENCES_PER_BUBBLE = 3
+const MAX_BUBBLE_CHARS = 280
+const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 72
 const DEFAULT_VISIBLE_POLL_INTERVAL_MS = 800
 const DEFAULT_HIDDEN_POLL_INTERVAL_MS = 2_500
 const RECONNECT_NOTE = 'Live updates paused. Reconnecting...'
@@ -272,16 +275,48 @@ function mergeUtteranceText(previousText: string, nextText: string): string {
   return collapseDuplicateWords([...previousWords, ...nextWords.slice(overlap)]).join(' ')
 }
 
+function countSentenceBoundaries(text: string): number {
+  const matches = text.match(/[.!?]+(?=(?:["')\]]|\s|$))/g)
+  return matches?.length ?? 0
+}
+
+function endsWithSentenceBoundary(text: string): boolean {
+  const trimmed = text.trim()
+  if (!trimmed) return false
+  return /[.!?]["')\]]*$/.test(trimmed)
+}
+
+function hasLogicalBubbleBoundary(line: TranscriptLine): boolean {
+  const text = normalizeTranscriptText(line.text)
+  if (!text) return false
+
+  if (text.length >= MAX_BUBBLE_CHARS) {
+    return true
+  }
+
+  const sentenceCount = countSentenceBoundaries(text)
+  if (sentenceCount >= MAX_SENTENCES_PER_BUBBLE) {
+    return true
+  }
+
+  return endsWithSentenceBoundary(text)
+}
+
 function shouldStartNewUtterance(previous: TranscriptLine, next: TranscriptLine): boolean {
   if (previous.speaker !== next.speaker) {
     return true
   }
 
-  if (previous.isFinal) {
+  const gapMs = next.timestamp - previous.timestamp
+  if (gapMs > UTTERANCE_GAP_MS) {
     return true
   }
 
-  return next.timestamp - previous.timestamp > UTTERANCE_GAP_MS
+  if (!previous.isFinal) {
+    return false
+  }
+
+  return hasLogicalBubbleBoundary(previous)
 }
 
 function compactTranscriptForDisplay(lines: TranscriptLine[]): TranscriptLine[] {
@@ -378,6 +413,7 @@ export function CasePanel({
   const [advice, setAdvice] = useState<LiveAdvice>(createDefaultAdvice())
   const [rawTranscript, setRawTranscript] = useState<TranscriptLine[]>([])
   const transcriptViewportRef = useRef<HTMLDivElement | null>(null)
+  const shouldAutoFollowTranscriptRef = useRef(true)
 
   const storageKey = `${STORAGE_KEY_PREFIX}${slug}`
   const supabase = useMemo(() => createClient(), [])
@@ -619,9 +655,30 @@ export function CasePanel({
   }, [callId, slug, storageKey, supabase])
 
   useEffect(() => {
+    const viewport = transcriptViewportRef.current
+    if (!viewport) return
+
+    const updateAutoFollow = () => {
+      const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight
+      shouldAutoFollowTranscriptRef.current = distanceFromBottom <= AUTO_SCROLL_BOTTOM_THRESHOLD_PX
+    }
+
+    updateAutoFollow()
+    viewport.addEventListener('scroll', updateAutoFollow, { passive: true })
+
+    return () => {
+      viewport.removeEventListener('scroll', updateAutoFollow)
+    }
+  }, [panelState, callId])
+
+  useEffect(() => {
     if (transcript.length === 0) return
     const viewport = transcriptViewportRef.current
     if (!viewport) return
+
+    if (!shouldAutoFollowTranscriptRef.current && transcript.length > 1) {
+      return
+    }
 
     viewport.scrollTo({
       top: viewport.scrollHeight,
@@ -699,6 +756,7 @@ export function CasePanel({
     setLastUpdated(null)
     setAdvice(createDefaultAdvice())
     setRawTranscript([])
+    shouldAutoFollowTranscriptRef.current = true
     window.sessionStorage.removeItem(storageKey)
   }
 
@@ -841,7 +899,7 @@ export function CasePanel({
               {transcript.map((line) => (
                 <div
                   key={line.id}
-                  className={`mx-auto w-fit max-w-[95%] rounded-2xl border px-4 py-3 transition-[width,height] duration-150 ${
+                  className={`mx-auto w-fit max-w-[95%] rounded-2xl border px-4 py-3 transition-colors duration-150 ${
                     line.isFinal
                       ? 'border-border/70 bg-secondary/80'
                       : 'border-primary/30 bg-primary/5'
