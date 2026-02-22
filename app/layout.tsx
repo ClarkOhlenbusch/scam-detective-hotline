@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { DM_Sans, Playfair_Display, Special_Elite } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import { BRAND_DESCRIPTION, BRAND_TITLE } from '@/lib/brand'
 import './globals.css'
 
 const dmSans = DM_Sans({
@@ -20,8 +21,8 @@ const specialElite = Special_Elite({
 })
 
 export const metadata: Metadata = {
-  title: 'The Scam Detective Hotline',
-  description: 'Open a case. Get a second opinion before you act.',
+  title: BRAND_TITLE,
+  description: BRAND_DESCRIPTION,
   icons: {
     icon: '/favicon.png',
     apple: '/apple-icon.png',

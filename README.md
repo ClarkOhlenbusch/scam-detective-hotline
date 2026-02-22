@@ -1,11 +1,11 @@
-# The Scam Detective Hotline
+# Marlowe
 
 A hackathon project that helps people pause before they get scammed. Users submit their phone number, tap **Start Silent Monitor**, and receive a callback that streams live transcript to an on-screen scam coach.
 
 ## Project Goal
 We chose this project because AI-enabled scams amplify already widespread, underreported extortion and impersonation fraud: the FBI’s IC3 reported 39,416 extortion victims with about $54.3M in losses in 2022, and 14,190 government impersonation scam victims with over $394M in losses in 2023, with older adults disproportionately harmed ([FBI ICR](https://www.ic3.gov/AnnualReport/Reports/2022_ic3report.pdf), [FBI](https://www.fbi.gov/contact-us/field-offices/portland/news/fbi-warns-public-to-beware-of-scammers-impersonating-fbi-agents-and-other-government-officials)). Our goal was to build a practical tool that helps people pause and verify during high-pressure scam situations.
 
-This weekend, we built a working prototype of **The Scam Detective Hotline**: users can enter their phone number, tap **Open a Case**, and receive an instant AI callback for a **live** second opinion. We also developed and tested the core user flow and voice/scam test scenarios.
+This weekend, we built a working prototype of **Marlowe**: users can enter their phone number, tap **Open a Case**, and receive an instant AI callback for a **live** second opinion. We also developed and tested the core user flow and voice/scam test scenarios.
 
 ## Team
 - [Clark Ohlenbusch](https://www.linkedin.com/in/clark-ohlenbusch-bb8b60253/) - Lead Developer (Implemented the hotline backend and Twilio call orchestration to deliver rapid scam second-opinion callbacks)

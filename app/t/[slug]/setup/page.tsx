@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
+import { resolveTenantDisplayName } from '@/lib/brand'
 import { DetectiveBadge } from '@/components/detective-badge'
 import { SetupForm } from '@/components/setup-form'
 import { NoirFrame } from '@/components/noir-frame'
@@ -26,12 +27,14 @@ export default async function TenantSetupPage({
     notFound()
   }
 
+  const displayTenantName = resolveTenantDisplayName(tenant.name)
+
   return (
     <NoirFrame>
       <DetectiveBadge />
-      {tenant.name && (
+      {displayTenantName && (
         <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
-          {tenant.name}
+          {displayTenantName}
         </p>
       )}
       <p className="max-w-xs text-center font-mono text-sm leading-relaxed text-muted-foreground">

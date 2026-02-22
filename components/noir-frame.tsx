@@ -1,3 +1,5 @@
+import { BRAND_NAME } from '@/lib/brand'
+
 export function NoirFrame({ children }: { children: React.ReactNode }) {
   return (
     <main className="relative flex min-h-dvh flex-col items-center justify-center bg-background px-6 py-12">
@@ -12,7 +14,7 @@ export function NoirFrame({ children }: { children: React.ReactNode }) {
       {/* Footer */}
       <footer className="absolute inset-x-0 bottom-0 flex justify-center py-6">
         <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground/50">
-          Scam Detective Hotline
+          {BRAND_NAME}
         </p>
       </footer>
     </main>

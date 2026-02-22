@@ -12,6 +12,7 @@ import {
   ShieldQuestion,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { BRAND_NAME } from '@/lib/brand'
 import { createClient } from '@/lib/supabase/client'
 
 type PanelState = 'idle' | 'starting' | 'live' | 'ended' | 'error'
@@ -91,6 +92,16 @@ function formatStatusLabel(status: string): string {
   }
 
   return 'Connecting'
+}
+
+function isConnectedStatus(status: string): boolean {
+  const normalized = status.toLowerCase()
+  return (
+    normalized.includes('in-progress') ||
+    normalized.includes('in progress') ||
+    normalized.includes('active') ||
+    normalized.includes('answer')
+  )
 }
 
 function formatTime(timestamp: number | null): string {
@@ -178,7 +189,15 @@ function normalizeActionItems(advice: LiveAdvice): string[] {
   return [createDefaultAdvice().whatToDo]
 }
 
-export function CasePanel({ slug, maskedPhone }: { slug: string; maskedPhone: string }) {
+export function CasePanel({
+  slug,
+  maskedPhone,
+  tenantName,
+}: {
+  slug: string
+  maskedPhone: string
+  tenantName?: string | null
+}) {
   const [panelState, setPanelState] = useState<PanelState>('idle')
   const [callId, setCallId] = useState<string | null>(null)
   const [callStatus, setCallStatus] = useState('queued')
@@ -194,6 +213,11 @@ export function CasePanel({ slug, maskedPhone }: { slug: string; maskedPhone: st
   const storageKey = `${STORAGE_KEY_PREFIX}${slug}`
   const supabase = useMemo(() => createClient(), [])
   const actionItems = useMemo(() => normalizeActionItems(advice), [advice])
+  const callConnected = panelState === 'live' && isConnectedStatus(callStatus)
+  const showCaseHeader = panelState === 'idle'
+  const showProtectedNumberCard =
+    panelState === 'idle' || panelState === 'starting' || (panelState === 'live' && !callConnected)
+  const showPreConnectStatusCard = panelState === 'ended' || !callConnected
 
   useEffect(() => {
     const existingCallId = window.sessionStorage.getItem(storageKey)
@@ -483,20 +507,35 @@ export function CasePanel({ slug, maskedPhone }: { slug: string; maskedPhone: st
 
   return (
     <div className="flex w-full max-w-md flex-col gap-4">
-      <div className="flex items-center justify-between rounded-xl border border-border bg-card/70 px-4 py-3">
+      {showCaseHeader && (
         <div className="flex flex-col gap-1">
-          <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Protected Number</p>
-          <p className="font-mono text-base text-foreground">{maskedPhone}</p>
+          <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground/80">
+            {BRAND_NAME}
+          </p>
+          {tenantName && (
+            <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">{tenantName}</p>
+          )}
         </div>
-        {panelState !== 'idle' && (
-          <div className="text-right">
-            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Status</p>
-            <p className="font-mono text-xs uppercase tracking-widest text-foreground">
-              {panelState === 'starting' ? 'Starting' : formatStatusLabel(callStatus)}
+      )}
+
+      {showProtectedNumberCard && (
+        <div className="flex items-center justify-between rounded-xl border border-border bg-card/70 px-4 py-3">
+          <div className="flex flex-col gap-1">
+            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+              Protected Number
             </p>
+            <p className="font-mono text-base text-foreground">{maskedPhone}</p>
           </div>
-        )}
-      </div>
+          {panelState !== 'idle' && (
+            <div className="text-right">
+              <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Status</p>
+              <p className="font-mono text-xs uppercase tracking-widest text-foreground">
+                {panelState === 'starting' ? 'Starting' : formatStatusLabel(callStatus)}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {panelState === 'idle' && (
         <div className="flex w-full flex-col gap-3 rounded-2xl border border-border bg-card/70 px-4 py-5">
@@ -529,21 +568,34 @@ export function CasePanel({ slug, maskedPhone }: { slug: string; maskedPhone: st
 
       {(panelState === 'live' || panelState === 'ended') && (
         <div className="flex w-full flex-col gap-3">
-          <div className="rounded-2xl border border-border bg-card/80 px-4 py-3">
-            <div className="flex items-center justify-between gap-3">
-              <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
-                {formatStatusLabel(callStatus)}
+          {showPreConnectStatusCard && (
+            <div className="rounded-2xl border border-border bg-card/80 px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
+                  {formatStatusLabel(callStatus)}
+                </p>
+                <p className="font-mono text-xs text-muted-foreground">Updated {formatTime(lastUpdated)}</p>
+              </div>
+              <p className="mt-2 font-mono text-xs text-muted-foreground">
+                Silent mode: {assistantMuted ? 'on' : 'starting'}
               </p>
-              <p className="font-mono text-xs text-muted-foreground">Updated {formatTime(lastUpdated)}</p>
+              {analyzing && (
+                <p className="mt-1 font-mono text-xs text-muted-foreground">
+                  Reading the latest part of the call...
+                </p>
+              )}
+              {caseNote && <p className="mt-2 font-mono text-sm text-foreground">{caseNote}</p>}
             </div>
-            <p className="mt-2 font-mono text-xs text-muted-foreground">
-              Silent mode: {assistantMuted ? 'on' : 'starting'}
-            </p>
-            {analyzing && (
-              <p className="mt-1 font-mono text-xs text-muted-foreground">Reading the latest part of the call...</p>
-            )}
-            {caseNote && <p className="mt-2 font-mono text-sm text-foreground">{caseNote}</p>}
-          </div>
+          )}
+
+          {!showPreConnectStatusCard && (analyzing || caseNote) && (
+            <div className="px-1">
+              {analyzing && (
+                <p className="font-mono text-xs text-muted-foreground">Reading the latest part of the call...</p>
+              )}
+              {caseNote && <p className="mt-1 font-mono text-sm text-foreground">{caseNote}</p>}
+            </div>
+          )}
 
           <div className="rounded-2xl border border-primary/40 bg-primary/10 px-4 py-4">
             <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">What To Do</p>

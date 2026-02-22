@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { BRAND_CASE_NAME } from '@/lib/brand'
 
 const TENANT_COOKIE = 'tenant_slug'
 const TENANT_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365
@@ -33,7 +34,7 @@ async function createTenant() {
 
   for (let i = 0; i < MAX_PROVISION_ATTEMPTS; i += 1) {
     const slug = generateSlug()
-    const name = 'Scam Detective Case'
+    const name = BRAND_CASE_NAME
 
     const { data, error } = await supabase
       .from('tenants')
