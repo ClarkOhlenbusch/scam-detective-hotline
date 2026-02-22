@@ -38,12 +38,7 @@ Scammers use **urgency, fear, and isolation** to prevent victims from pausing to
 ---
 
 ## Why This Is More Than a Wrapper
-<img
-  src="./public/marlowe_movie_1969.jpg"
-  alt="Marlowe (1969) poster inspiration"
-  width="110"
-  align="right"
-/>
+<img src="./public/marlowe_movie_1969.jpg" alt="Marlowe (1969) poster inspiration" width="95" align="right" />
 Most "AI scam detector" demos paste text into a chatbot and call it a day. Marlowe is fundamentally different — we built a **live telephony feedback loop** that works on real phone calls, including iPhone calls that are normally completely gated from third-party access.
 
 Here's what we actually pulled off this weekend:
