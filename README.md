@@ -19,7 +19,7 @@
 ---
 
 <p align="center">
-  <img src="./public/marlowe_phone_1.png" alt="Marlowe app phone screenshot" width="420" />
+  <img src="./public/marlowe_phone_1_update.png" alt="Marlowe app phone screenshot" width="420" />
 </p>
 
 ---
