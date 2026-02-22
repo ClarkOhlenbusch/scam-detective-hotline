@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getPublicBaseUrl } from '@/lib/public-url'
 
 export const runtime = 'nodejs'
 
@@ -17,9 +18,10 @@ function escapeXml(value: string): string {
 
 function buildTwiml(request: NextRequest): string {
   const slug = request.nextUrl.searchParams.get('slug')
+  const publicBaseUrl = getPublicBaseUrl(request)
 
-  const webhookUrl = new URL('/api/twilio/webhook', request.url)
-  const redirectUrl = new URL('/api/twilio/twiml', request.url)
+  const webhookUrl = new URL('/api/twilio/webhook', publicBaseUrl)
+  const redirectUrl = new URL('/api/twilio/twiml', publicBaseUrl)
 
   if (isValidSlug(slug)) {
     webhookUrl.searchParams.set('slug', slug)

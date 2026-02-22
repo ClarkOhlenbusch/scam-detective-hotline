@@ -3,6 +3,7 @@ import { isValidE164 } from '@/lib/phone'
 import { getClientIp, takeCooldown, takeRateLimit } from '@/lib/rate-limit'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { upsertLiveCallSession } from '@/lib/live-store'
+import { getPublicBaseUrl } from '@/lib/public-url'
 import { createOutboundTwilioCall, getTwilioConfig } from '@/lib/twilio-api'
 
 export const runtime = 'nodejs'
@@ -68,10 +69,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const twimlUrl = new URL('/api/twilio/twiml', request.url)
+    const publicBaseUrl = getPublicBaseUrl(request)
+
+    const twimlUrl = new URL('/api/twilio/twiml', publicBaseUrl)
     twimlUrl.searchParams.set('slug', slug)
 
-    const webhookUrl = new URL('/api/twilio/webhook', request.url)
+    const webhookUrl = new URL('/api/twilio/webhook', publicBaseUrl)
     webhookUrl.searchParams.set('slug', slug)
 
     let callId = ''
