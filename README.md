@@ -245,6 +245,14 @@ Configured for Vercel. Import the repo into Vercel, set the environment variable
 
 ---
 
+## Demo Video
+
+See Marlowe in action:
+
+[![Watch the Marlowe demo](https://img.youtube.com/vi/ftL_NtnvJX8/0.jpg)](https://youtube.com/shorts/ftL_NtnvJX8)
+
+---
+
 ## Reflection
 
 Our main challenge was designing something people could realistically use during a high-stress scam call, so we focused on a simple, fast user flow. We also attended Lucas Maley’s PM workshop, which helped us think more clearly about product design and feature prioritization.
